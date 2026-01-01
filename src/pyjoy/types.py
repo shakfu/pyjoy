@@ -34,6 +34,7 @@ class JoyType(Enum):
     SET = auto()
     QUOTATION = auto()
     SYMBOL = auto()
+    FILE = auto()  # File handle for I/O operations
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,10 @@ class JoyValue:
             return "{" + inner + "}"
         elif self.type == JoyType.QUOTATION:
             return repr(self.value)
+        elif self.type == JoyType.FILE:
+            if self.value is None:
+                return "file:NULL"
+            return f"file:{self.value.name if hasattr(self.value, 'name') else 'stream'}"
         else:
             return str(self.value)
 
@@ -118,6 +123,11 @@ class JoyValue:
         """Create a SYMBOL value."""
         return cls(JoyType.SYMBOL, name)
 
+    @classmethod
+    def file(cls, handle: Any) -> JoyValue:
+        """Create a FILE value (wraps a Python file object)."""
+        return cls(JoyType.FILE, handle)
+
     # Type checking helpers
 
     def is_numeric(self) -> bool:
@@ -144,6 +154,8 @@ class JoyValue:
             return len(self.value) > 0
         elif self.type == JoyType.QUOTATION:
             return len(self.value.terms) > 0
+        elif self.type == JoyType.FILE:
+            return self.value is not None
         else:
             return True
 

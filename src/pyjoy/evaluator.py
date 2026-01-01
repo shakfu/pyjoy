@@ -721,6 +721,8 @@ def null(ctx: ExecutionContext) -> None:
     elif x.type in (JoyType.LIST, JoyType.QUOTATION, JoyType.STRING, JoyType.SET):
         items = _get_aggregate(x, "null")
         result = len(items) == 0
+    elif x.type == JoyType.FILE:
+        result = x.value is None
     else:
         result = False
     ctx.stack.push_value(JoyValue.boolean(result))
@@ -1655,3 +1657,487 @@ def genrec(ctx: ExecutionContext) -> None:
             ctx.evaluator.execute(r2)
 
     genrec_aux()
+
+
+# =============================================================================
+# Phase 5: I/O and System Operations
+# =============================================================================
+
+import sys
+import os
+import time as time_module
+import io as io_module
+
+
+# -----------------------------------------------------------------------------
+# Output Primitives
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="put", params=1, doc="X ->")
+def put(ctx: ExecutionContext) -> None:
+    """Write X to output, then pop X off stack."""
+    x = ctx.stack.pop()
+    # Write the Joy representation
+    print(repr(x), end="")
+
+
+@joy_word(name="putch", params=1, doc="N ->")
+def putch(ctx: ExecutionContext) -> None:
+    """Write character whose ASCII/Unicode is N."""
+    n = ctx.stack.pop()
+    if n.type == JoyType.INTEGER:
+        print(chr(n.value), end="")
+    elif n.type == JoyType.CHAR:
+        print(n.value, end="")
+    else:
+        raise JoyTypeError("putch", "integer or char", n.type.name)
+
+
+@joy_word(name="putchars", params=1, doc="S ->")
+def putchars(ctx: ExecutionContext) -> None:
+    """Write string S (without quotes)."""
+    s = ctx.stack.pop()
+    if s.type != JoyType.STRING:
+        raise JoyTypeError("putchars", "string", s.type.name)
+    print(s.value, end="")
+
+
+@joy_word(name="newline", params=0, doc="->")
+def newline(ctx: ExecutionContext) -> None:
+    """Write a newline character."""
+    print()
+
+
+# -----------------------------------------------------------------------------
+# Input Primitives
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="get", params=0, doc="-> F")
+def get(ctx: ExecutionContext) -> None:
+    """Read a factor from input and push it onto stack."""
+    from pyjoy.parser import parse
+
+    line = input()
+    program = parse(line)
+    # Push all terms from parsed input
+    for term in program.terms:
+        if isinstance(term, JoyValue):
+            ctx.stack.push_value(term)
+        elif isinstance(term, str):
+            # Symbol - look it up or treat as string
+            ctx.stack.push(term)
+        else:
+            ctx.stack.push(term)
+
+
+@joy_word(name="getch", params=0, doc="-> C")
+def getch(ctx: ExecutionContext) -> None:
+    """Read a single character from input."""
+    ch = sys.stdin.read(1)
+    if ch:
+        ctx.stack.push_value(JoyValue.char(ch))
+    else:
+        ctx.stack.push_value(JoyValue.integer(-1))  # EOF
+
+
+@joy_word(name="getline", params=0, doc="-> S")
+def getline(ctx: ExecutionContext) -> None:
+    """Read a line from input (without newline)."""
+    try:
+        line = input()
+        ctx.stack.push_value(JoyValue.string(line))
+    except EOFError:
+        ctx.stack.push_value(JoyValue.string(""))
+
+
+# -----------------------------------------------------------------------------
+# Standard Streams
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="stdin", params=0, doc="-> S")
+def stdin_(ctx: ExecutionContext) -> None:
+    """Push the standard input stream."""
+    ctx.stack.push_value(JoyValue.file(sys.stdin))
+
+
+@joy_word(name="stdout", params=0, doc="-> S")
+def stdout_(ctx: ExecutionContext) -> None:
+    """Push the standard output stream."""
+    ctx.stack.push_value(JoyValue.file(sys.stdout))
+
+
+@joy_word(name="stderr", params=0, doc="-> S")
+def stderr_(ctx: ExecutionContext) -> None:
+    """Push the standard error stream."""
+    ctx.stack.push_value(JoyValue.file(sys.stderr))
+
+
+# -----------------------------------------------------------------------------
+# File Operations
+# -----------------------------------------------------------------------------
+
+
+def _expect_file(v: JoyValue, op: str) -> io_module.IOBase:
+    """Extract file handle from JoyValue."""
+    if v.type != JoyType.FILE:
+        raise JoyTypeError(op, "file", v.type.name)
+    if v.value is None:
+        raise JoyTypeError(op, "open file", "NULL file")
+    return v.value
+
+
+@joy_word(name="fopen", params=2, doc="P M -> S")
+def fopen(ctx: ExecutionContext) -> None:
+    """Open file with pathname P and mode M, push stream S."""
+    mode, path = ctx.stack.pop_n(2)
+    if path.type != JoyType.STRING:
+        raise JoyTypeError("fopen", "string (path)", path.type.name)
+    if mode.type != JoyType.STRING:
+        raise JoyTypeError("fopen", "string (mode)", mode.type.name)
+
+    try:
+        # Handle binary modes
+        if "b" in mode.value:
+            f = open(path.value, mode.value)
+        else:
+            f = open(path.value, mode.value, encoding="utf-8")
+        ctx.stack.push_value(JoyValue.file(f))
+    except (OSError, IOError):
+        # Push NULL file on failure
+        ctx.stack.push_value(JoyValue.file(None))
+
+
+@joy_word(name="fclose", params=1, doc="S ->")
+def fclose(ctx: ExecutionContext) -> None:
+    """Close stream S and remove from stack."""
+    s = ctx.stack.pop()
+    f = _expect_file(s, "fclose")
+    if f not in (sys.stdin, sys.stdout, sys.stderr):
+        f.close()
+
+
+@joy_word(name="fread", params=2, doc="S I -> S L")
+def fread(ctx: ExecutionContext) -> None:
+    """Read I bytes from stream S, return as list of integers."""
+    count, stream = ctx.stack.pop_n(2)
+    f = _expect_file(stream, "fread")
+    if count.type != JoyType.INTEGER:
+        raise JoyTypeError("fread", "integer", count.type.name)
+
+    data = f.read(count.value)
+    if isinstance(data, str):
+        # Text mode - convert to bytes
+        data = data.encode("utf-8")
+
+    result = tuple(JoyValue.integer(b) for b in data)
+    ctx.stack.push_value(stream)
+    ctx.stack.push_value(JoyValue.list(result))
+
+
+@joy_word(name="fwrite", params=2, doc="S L -> S")
+def fwrite(ctx: ExecutionContext) -> None:
+    """Write list of integers as bytes to stream S."""
+    lst, stream = ctx.stack.pop_n(2)
+    f = _expect_file(stream, "fwrite")
+    if lst.type not in (JoyType.LIST, JoyType.QUOTATION):
+        raise JoyTypeError("fwrite", "list", lst.type.name)
+
+    items = lst.value if lst.type == JoyType.LIST else lst.value.terms
+    data = bytes(int(item.value) & 0xFF for item in items if isinstance(item, JoyValue))
+
+    if hasattr(f, "mode") and "b" in f.mode:
+        f.write(data)
+    else:
+        f.write(data.decode("utf-8", errors="replace"))
+
+    ctx.stack.push_value(stream)
+
+
+@joy_word(name="fflush", params=1, doc="S -> S")
+def fflush(ctx: ExecutionContext) -> None:
+    """Flush stream S."""
+    stream = ctx.stack.peek()
+    f = _expect_file(stream, "fflush")
+    f.flush()
+
+
+@joy_word(name="feof", params=1, doc="S -> S B")
+def feof(ctx: ExecutionContext) -> None:
+    """Test if stream S is at end of file."""
+    stream = ctx.stack.peek()
+    f = _expect_file(stream, "feof")
+    # Try to check EOF by reading and putting back
+    pos = f.tell() if hasattr(f, "tell") and f.seekable() else None
+    ch = f.read(1)
+    at_eof = len(ch) == 0
+    if pos is not None and not at_eof:
+        f.seek(pos)
+    ctx.stack.push_value(JoyValue.boolean(at_eof))
+
+
+@joy_word(name="ftell", params=1, doc="S -> S I")
+def ftell(ctx: ExecutionContext) -> None:
+    """Get current position in stream S."""
+    stream = ctx.stack.peek()
+    f = _expect_file(stream, "ftell")
+    pos = f.tell() if hasattr(f, "tell") else 0
+    ctx.stack.push_value(JoyValue.integer(pos))
+
+
+@joy_word(name="fseek", params=3, doc="S I W -> S")
+def fseek(ctx: ExecutionContext) -> None:
+    """Seek to position I in stream S with whence W."""
+    whence, pos, stream = ctx.stack.pop_n(3)
+    f = _expect_file(stream, "fseek")
+    if pos.type != JoyType.INTEGER:
+        raise JoyTypeError("fseek", "integer (position)", pos.type.name)
+    if whence.type != JoyType.INTEGER:
+        raise JoyTypeError("fseek", "integer (whence)", whence.type.name)
+
+    f.seek(pos.value, whence.value)
+    ctx.stack.push_value(stream)
+
+
+@joy_word(name="fputch", params=2, doc="S C -> S")
+def fputch(ctx: ExecutionContext) -> None:
+    """Write character C to stream S."""
+    ch, stream = ctx.stack.pop_n(2)
+    f = _expect_file(stream, "fputch")
+
+    if ch.type == JoyType.INTEGER:
+        f.write(chr(ch.value))
+    elif ch.type == JoyType.CHAR:
+        f.write(ch.value)
+    else:
+        raise JoyTypeError("fputch", "integer or char", ch.type.name)
+
+    ctx.stack.push_value(stream)
+
+
+@joy_word(name="fgetch", params=1, doc="S -> S C")
+def fgetch(ctx: ExecutionContext) -> None:
+    """Read a character from stream S."""
+    stream = ctx.stack.peek()
+    f = _expect_file(stream, "fgetch")
+    ch = f.read(1)
+    if ch:
+        ctx.stack.push_value(JoyValue.char(ch))
+    else:
+        ctx.stack.push_value(JoyValue.integer(-1))  # EOF
+
+
+@joy_word(name="fputchars", params=2, doc="S A -> S")
+def fputchars(ctx: ExecutionContext) -> None:
+    """Write string/list A to stream S."""
+    agg, stream = ctx.stack.pop_n(2)
+    f = _expect_file(stream, "fputchars")
+
+    if agg.type == JoyType.STRING:
+        f.write(agg.value)
+    elif agg.type in (JoyType.LIST, JoyType.QUOTATION):
+        items = agg.value if agg.type == JoyType.LIST else agg.value.terms
+        for item in items:
+            if isinstance(item, JoyValue):
+                if item.type == JoyType.CHAR:
+                    f.write(item.value)
+                elif item.type == JoyType.INTEGER:
+                    f.write(chr(item.value))
+    else:
+        raise JoyTypeError("fputchars", "string or list", agg.type.name)
+
+    ctx.stack.push_value(stream)
+
+
+@joy_word(name="fgets", params=1, doc="S -> S L")
+def fgets(ctx: ExecutionContext) -> None:
+    """Read a line from stream S."""
+    stream = ctx.stack.peek()
+    f = _expect_file(stream, "fgets")
+    line = f.readline()
+    ctx.stack.push_value(JoyValue.string(line))
+
+
+# -----------------------------------------------------------------------------
+# System Operations
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="time", params=0, doc="-> I")
+def time_(ctx: ExecutionContext) -> None:
+    """Push current time in seconds since Epoch."""
+    ctx.stack.push_value(JoyValue.integer(int(time_module.time())))
+
+
+@joy_word(name="clock", params=0, doc="-> I")
+def clock(ctx: ExecutionContext) -> None:
+    """Push CPU time in microseconds."""
+    ctx.stack.push_value(JoyValue.integer(int(time_module.perf_counter() * 1_000_000)))
+
+
+@joy_word(name="getenv", params=1, doc="S -> S")
+def getenv_(ctx: ExecutionContext) -> None:
+    """Get environment variable value."""
+    name = ctx.stack.pop()
+    if name.type != JoyType.STRING:
+        raise JoyTypeError("getenv", "string", name.type.name)
+
+    value = os.environ.get(name.value, "")
+    ctx.stack.push_value(JoyValue.string(value))
+
+
+@joy_word(name="system", params=1, doc="S -> I")
+def system_(ctx: ExecutionContext) -> None:
+    """Execute system command, return exit code."""
+    cmd = ctx.stack.pop()
+    if cmd.type != JoyType.STRING:
+        raise JoyTypeError("system", "string", cmd.type.name)
+
+    exit_code = os.system(cmd.value)
+    ctx.stack.push_value(JoyValue.integer(exit_code))
+
+
+@joy_word(name="argc", params=0, doc="-> I")
+def argc_(ctx: ExecutionContext) -> None:
+    """Push number of command line arguments."""
+    ctx.stack.push_value(JoyValue.integer(len(sys.argv)))
+
+
+@joy_word(name="argv", params=0, doc="-> L")
+def argv_(ctx: ExecutionContext) -> None:
+    """Push list of command line arguments."""
+    args = tuple(JoyValue.string(arg) for arg in sys.argv)
+    ctx.stack.push_value(JoyValue.list(args))
+
+
+@joy_word(name="abort", params=0, doc="->")
+def abort_(ctx: ExecutionContext) -> None:
+    """Abort execution with error."""
+    raise SystemExit(1)
+
+
+@joy_word(name="quit", params=1, doc="I ->")
+def quit_(ctx: ExecutionContext) -> None:
+    """Exit with status code I."""
+    code = ctx.stack.pop()
+    if code.type != JoyType.INTEGER:
+        raise JoyTypeError("quit", "integer", code.type.name)
+    raise SystemExit(code.value)
+
+
+# -----------------------------------------------------------------------------
+# Formatting
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="format", params=4, doc="N C I J -> S")
+def format_(ctx: ExecutionContext) -> None:
+    """
+    Format N in mode C with max width I and min width J.
+
+    C is a character: 'd' or 'i' = decimal, 'o' = octal, 'x' or 'X' = hex.
+    """
+    j, i, c, n = ctx.stack.pop_n(4)
+
+    if n.type not in (JoyType.INTEGER, JoyType.FLOAT):
+        raise JoyTypeError("format", "numeric", n.type.name)
+    if c.type not in (JoyType.CHAR, JoyType.INTEGER):
+        raise JoyTypeError("format", "char", c.type.name)
+    if i.type != JoyType.INTEGER:
+        raise JoyTypeError("format", "integer (width)", i.type.name)
+    if j.type != JoyType.INTEGER:
+        raise JoyTypeError("format", "integer (precision)", j.type.name)
+
+    spec = chr(c.value) if c.type == JoyType.INTEGER else c.value
+    width = i.value
+    prec = j.value
+
+    if spec in ("d", "i"):
+        result = f"{int(n.value):*>{width}.{prec}d}" if prec else f"{int(n.value):>{width}d}"
+    elif spec == "o":
+        result = f"{int(n.value):>{width}o}"
+    elif spec == "x":
+        result = f"{int(n.value):>{width}x}"
+    elif spec == "X":
+        result = f"{int(n.value):>{width}X}"
+    elif spec == "f":
+        result = f"{float(n.value):>{width}.{prec}f}"
+    elif spec == "e":
+        result = f"{float(n.value):>{width}.{prec}e}"
+    else:
+        result = str(n.value)
+
+    ctx.stack.push_value(JoyValue.string(result))
+
+
+@joy_word(name="formatf", params=2, doc="F S -> S")
+def formatf(ctx: ExecutionContext) -> None:
+    """Format float F using format string S."""
+    fmt, f = ctx.stack.pop_n(2)
+    if f.type not in (JoyType.FLOAT, JoyType.INTEGER):
+        raise JoyTypeError("formatf", "numeric", f.type.name)
+    if fmt.type != JoyType.STRING:
+        raise JoyTypeError("formatf", "string", fmt.type.name)
+
+    try:
+        result = fmt.value % float(f.value)
+    except (ValueError, TypeError):
+        result = str(f.value)
+
+    ctx.stack.push_value(JoyValue.string(result))
+
+
+# -----------------------------------------------------------------------------
+# String Utilities
+# -----------------------------------------------------------------------------
+
+
+@joy_word(name="strtol", params=2, doc="S I -> N")
+def strtol(ctx: ExecutionContext) -> None:
+    """Convert string S to integer in base I."""
+    base, s = ctx.stack.pop_n(2)
+    if s.type != JoyType.STRING:
+        raise JoyTypeError("strtol", "string", s.type.name)
+    if base.type != JoyType.INTEGER:
+        raise JoyTypeError("strtol", "integer (base)", base.type.name)
+
+    try:
+        result = int(s.value, base.value)
+        ctx.stack.push_value(JoyValue.integer(result))
+    except ValueError:
+        ctx.stack.push_value(JoyValue.integer(0))
+
+
+@joy_word(name="strtod", params=1, doc="S -> F")
+def strtod(ctx: ExecutionContext) -> None:
+    """Convert string S to float."""
+    s = ctx.stack.pop()
+    if s.type != JoyType.STRING:
+        raise JoyTypeError("strtod", "string", s.type.name)
+
+    try:
+        result = float(s.value)
+        ctx.stack.push_value(JoyValue.floating(result))
+    except ValueError:
+        ctx.stack.push_value(JoyValue.floating(0.0))
+
+
+@joy_word(name="intern", params=1, doc="S -> A")
+def intern_(ctx: ExecutionContext) -> None:
+    """Convert string S to symbol (interned atom)."""
+    s = ctx.stack.pop()
+    if s.type != JoyType.STRING:
+        raise JoyTypeError("intern", "string", s.type.name)
+    ctx.stack.push_value(JoyValue.symbol(s.value))
+
+
+@joy_word(name="name", params=1, doc="A -> S")
+def name_(ctx: ExecutionContext) -> None:
+    """Convert atom/symbol to string."""
+    a = ctx.stack.pop()
+    if a.type == JoyType.SYMBOL:
+        ctx.stack.push_value(JoyValue.string(a.value))
+    else:
+        ctx.stack.push_value(JoyValue.string(repr(a)))
