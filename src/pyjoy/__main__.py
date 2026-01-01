@@ -25,7 +25,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyjoy",
         description="Joy Programming Language Interpreter",
-        epilog="Subcommands:\n  compile    Compile Joy program to C (use 'pyjoy compile --help')",
+        epilog="Subcommands:\n  compile    Compile to C (use 'pyjoy compile --help')",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(

@@ -179,7 +179,8 @@ SRCS = {source}
 all: $(TARGET)
 
 $(TARGET): $(SRCS) $(RUNTIME_SRCS)
-\t$(CC) $(CFLAGS) -I$(RUNTIME_DIR) $(addprefix $(RUNTIME_DIR)/,$(RUNTIME_SRCS)) $(SRCS) -o $@ $(LDFLAGS)
+\t$(CC) $(CFLAGS) -I$(RUNTIME_DIR) \\
+\t\t$(addprefix $(RUNTIME_DIR)/,$(RUNTIME_SRCS)) $(SRCS) -o $@ $(LDFLAGS)
 
 clean:
 \trm -f $(TARGET)

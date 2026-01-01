@@ -25,7 +25,7 @@ Analysis and design document for reimplementing Joy in Python 3 with Python func
 
 ### 2.1 Core Components
 
-```
+```text
 +------------------+     +------------------+     +------------------+
 |     Scanner      | --> |      Parser      | --> |    Evaluator     |
 | (Tokenization)   |     | (AST Building)   |     | (Stack Machine)  |

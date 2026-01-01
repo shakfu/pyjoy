@@ -17,7 +17,9 @@ from ...types import JoyQuotation, JoyType, JoyValue
 class CValue:
     """Represents a Joy value in C code."""
 
-    type: str  # "integer", "float", "boolean", "char", "string", "list", "set", "quotation", "symbol"
+    # "integer", "float", "boolean", "char", "string", "list", "set",
+    # "quotation", "symbol"
+    type: str
     value: Any
 
     def to_c_init(self) -> str:
@@ -51,7 +53,8 @@ class CValue:
             )
             return f'joy_string("{escaped}")'
         elif self.type == "set":
-            return f"joy_set_from((int[]){{{', '.join(str(m) for m in sorted(self.value))}}}, {len(self.value)})"
+            members = ", ".join(str(m) for m in sorted(self.value))
+            return f"joy_set_from((int[]){{{members}}}, {len(self.value)})"
         elif self.type == "symbol":
             return f'joy_symbol("{self.value}")'
         elif self.type == "quotation":

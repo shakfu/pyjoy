@@ -468,7 +468,7 @@ class TestCompilation:
         source = "42"
 
         with TemporaryDirectory() as tmpdir:
-            result = compile_joy_to_c(
+            compile_joy_to_c(
                 source,
                 output_dir=tmpdir,
                 target_name="test_runtime",
@@ -486,7 +486,7 @@ class TestCompilation:
         source = "42"
 
         with TemporaryDirectory() as tmpdir:
-            result = compile_joy_to_c(
+            compile_joy_to_c(
                 source,
                 output_dir=tmpdir,
                 target_name="test_make",

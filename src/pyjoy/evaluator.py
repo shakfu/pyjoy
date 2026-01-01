@@ -6,6 +6,10 @@ Executes Joy programs by iterating through terms and manipulating the stack.
 
 from __future__ import annotations
 
+import io as io_module
+import os
+import sys
+import time as time_module
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
 
@@ -49,7 +53,7 @@ def joy_word(
     """
 
     def decorator(func: Callable[..., None]) -> WordFunc:
-        word_name = name or func.__name__
+        word_name = name or getattr(func, "__name__", "unknown")
 
         @wraps(func)
         def wrapper(ctx: ExecutionContext) -> None:
@@ -1484,7 +1488,7 @@ def primrec(ctx: ExecutionContext) -> None:
             ctx.stack.push(member)
             ctx.evaluator.execute(c)
     else:
-        raise JoyTypeError(f"primrec: expected integer or aggregate, got {x.type}")
+        raise JoyTypeError("primrec", "integer or aggregate", x.type.name)
 
 
 @joy_word(name="linrec", params=4, doc="[P] [T] [R1] [R2] -> ...")
@@ -1689,11 +1693,6 @@ def genrec(ctx: ExecutionContext) -> None:
 # Phase 5: I/O and System Operations
 # =============================================================================
 
-import io as io_module
-import os
-import sys
-import time as time_module
-
 # -----------------------------------------------------------------------------
 # Output Primitives
 # -----------------------------------------------------------------------------
@@ -1726,12 +1725,6 @@ def putchars(ctx: ExecutionContext) -> None:
     if s.type != JoyType.STRING:
         raise JoyTypeError("putchars", "string", s.type.name)
     print(s.value, end="")
-
-
-@joy_word(name="newline", params=0, doc="->")
-def newline(ctx: ExecutionContext) -> None:
-    """Write a newline character."""
-    print()
 
 
 # -----------------------------------------------------------------------------
@@ -1872,7 +1865,8 @@ def fwrite(ctx: ExecutionContext) -> None:
     items = lst.value if lst.type == JoyType.LIST else lst.value.terms
     data = bytes(int(item.value) & 0xFF for item in items if isinstance(item, JoyValue))
 
-    if hasattr(f, "mode") and "b" in f.mode:
+    mode = getattr(f, "mode", "")
+    if isinstance(mode, str) and "b" in mode:
         f.write(data)
     else:
         f.write(data.decode("utf-8", errors="replace"))
@@ -1981,6 +1975,8 @@ def fgets(ctx: ExecutionContext) -> None:
     stream = ctx.stack.peek()
     f = _expect_file(stream, "fgets")
     line = f.readline()
+    if isinstance(line, bytes):
+        line = line.decode("utf-8", errors="replace")
     ctx.stack.push_value(JoyValue.string(line))
 
 
@@ -2298,7 +2294,7 @@ def drop_(ctx: ExecutionContext) -> None:
 
 @joy_word(name="localtime", params=1, doc="I -> [I I I I I I B I I]")
 def localtime_(ctx: ExecutionContext) -> None:
-    """Convert epoch time to local time list [year month day hour min sec isdst yday wday]."""
+    """Convert epoch to local time [year mon day hour min sec isdst yday wday]."""
     import time as time_module
 
     t = ctx.stack.pop()
@@ -2322,7 +2318,7 @@ def localtime_(ctx: ExecutionContext) -> None:
 
 @joy_word(name="gmtime", params=1, doc="I -> [I I I I I I B I I]")
 def gmtime_(ctx: ExecutionContext) -> None:
-    """Convert epoch time to UTC time list [year month day hour min sec isdst yday wday]."""
+    """Convert epoch to UTC time [year mon day hour min sec isdst yday wday]."""
     import time as time_module
 
     t = ctx.stack.pop()

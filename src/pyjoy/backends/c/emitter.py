@@ -68,7 +68,8 @@ class CEmitter:
             lines.append("static void register_definitions(JoyContext* ctx) {")
             for defn in program.definitions:
                 lines.append(
-                    f'    joy_dict_define_primitive(ctx->dictionary, "{defn.name}", {defn.c_name});'
+                    f"    joy_dict_define_primitive("
+                    f'ctx->dictionary, "{defn.name}", {defn.c_name});'
                 )
             lines.append("}")
             lines.append("")
@@ -160,7 +161,10 @@ class CEmitter:
         elif value.type == "quotation":
             # Reference the pre-built quotation
             if isinstance(value.value, CQuotation):
-                return f"(JoyValue){{.type = JOY_QUOTATION, .data.quotation = joy_quotation_copy({value.value.name})}}"
+                return (
+                    f"(JoyValue){{.type = JOY_QUOTATION, "
+                    f".data.quotation = joy_quotation_copy({value.value.name})}}"
+                )
             else:
                 return "joy_quotation_empty()"
 
@@ -196,9 +200,11 @@ class CEmitter:
             elif term.type == "quotation":
                 # Push the quotation onto the stack
                 if isinstance(term.value, CQuotation):
-                    lines.append(
-                        f"{indent_str}joy_stack_push(ctx->stack, (JoyValue){{.type = JOY_QUOTATION, .data.quotation = joy_quotation_copy({term.value.name})}});"
+                    qval = (
+                        f"(JoyValue){{.type = JOY_QUOTATION, "
+                        f".data.quotation = joy_quotation_copy({term.value.name})}}"
                     )
+                    lines.append(f"{indent_str}joy_stack_push(ctx->stack, {qval});")
                 else:
                     lines.append(f"{indent_str}/* push quotation */")
 

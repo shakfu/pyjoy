@@ -148,21 +148,21 @@ class Parser:
         assert start_token is not None
 
         definitions: List[Definition] = []
-        is_public = True  # Default visibility
+        _is_public = True  # Default visibility (not yet implemented)
 
         while True:
             token = self._current()
             if token is None:
                 break
 
-            # Handle visibility modifiers
+            # Handle visibility modifiers (parsed but not yet implemented)
             if token.type == "PUBLIC_KW":
                 self._advance()
-                is_public = True
+                _is_public = True
                 continue
             elif token.type == "PRIVATE_KW":
                 self._advance()
-                is_public = False
+                _is_public = False
                 continue
             elif token.type == "END_KW":
                 self._advance()

@@ -110,6 +110,11 @@ static void prim_popd(JoyContext* ctx) {
     PUSH(y);
 }
 
+static void prim_id(JoyContext* ctx) {
+    /* Identity function - does nothing */
+    (void)ctx;
+}
+
 static void prim_stack(JoyContext* ctx) {
     JoyValue list = joy_list_empty();
     for (size_t i = ctx->stack->depth; i > 0; i--) {
@@ -507,6 +512,39 @@ static void prim_not(JoyContext* ctx) {
     joy_value_free(&v);
 }
 
+static void prim_xor(JoyContext* ctx) {
+    REQUIRE(2, "xor");
+    JoyValue b = POP();
+    JoyValue a = POP();
+    if (a.type == JOY_SET && b.type == JOY_SET) {
+        /* Set symmetric difference */
+        JoyValue result = {.type = JOY_SET, .data.set = a.data.set ^ b.data.set};
+        PUSH(result);
+    } else {
+        /* Logical XOR (a != b for booleans) */
+        PUSH(joy_boolean(joy_value_truthy(a) != joy_value_truthy(b)));
+    }
+    joy_value_free(&a);
+    joy_value_free(&b);
+}
+
+static void prim_choice(JoyContext* ctx) {
+    /* B T F -> X : if B then X=T else X=F */
+    REQUIRE(3, "choice");
+    JoyValue f = POP();
+    JoyValue t = POP();
+    JoyValue b = POP();
+    bool cond = joy_value_truthy(b);
+    joy_value_free(&b);
+    if (cond) {
+        PUSH(t);
+        joy_value_free(&f);
+    } else {
+        PUSH(f);
+        joy_value_free(&t);
+    }
+}
+
 /* ---------- List/Aggregate Operations ---------- */
 
 static void prim_first(JoyContext* ctx) {
@@ -676,6 +714,189 @@ static void prim_size(JoyContext* ctx) {
     }
     joy_value_free(&v);
     PUSH(joy_integer((int64_t)sz));
+}
+
+static void prim_at(JoyContext* ctx) {
+    /* A I -> X : get element at index I from aggregate A */
+    REQUIRE(2, "at");
+    JoyValue idx = POP();
+    JoyValue agg = POP();
+    EXPECT_TYPE(idx, JOY_INTEGER, "at");
+    int64_t i = idx.data.integer;
+    joy_value_free(&idx);
+
+    if (i < 0) {
+        joy_value_free(&agg);
+        joy_error("at: negative index");
+    }
+
+    switch (agg.type) {
+        case JOY_LIST:
+            if ((size_t)i >= agg.data.list->length) {
+                joy_value_free(&agg);
+                joy_error("at: index out of bounds");
+            }
+            PUSH(joy_value_copy(agg.data.list->items[i]));
+            break;
+        case JOY_QUOTATION:
+            if ((size_t)i >= agg.data.quotation->length) {
+                joy_value_free(&agg);
+                joy_error("at: index out of bounds");
+            }
+            PUSH(joy_value_copy(agg.data.quotation->terms[i]));
+            break;
+        case JOY_STRING:
+            if ((size_t)i >= strlen(agg.data.string)) {
+                joy_value_free(&agg);
+                joy_error("at: index out of bounds");
+            }
+            PUSH(joy_char(agg.data.string[i]));
+            break;
+        default:
+            joy_value_free(&agg);
+            joy_error_type("at", "aggregate", agg.type);
+    }
+    joy_value_free(&agg);
+}
+
+static void prim_drop(JoyContext* ctx) {
+    /* A N -> B : drop first N elements from aggregate A */
+    REQUIRE(2, "drop");
+    JoyValue nv = POP();
+    JoyValue agg = POP();
+    EXPECT_TYPE(nv, JOY_INTEGER, "drop");
+    int64_t n = nv.data.integer;
+    joy_value_free(&nv);
+
+    if (n < 0) {
+        joy_value_free(&agg);
+        joy_error("drop: negative count");
+    }
+
+    switch (agg.type) {
+        case JOY_LIST: {
+            size_t start = (size_t)n < agg.data.list->length ? (size_t)n : agg.data.list->length;
+            JoyList* result = joy_list_new(agg.data.list->length - start);
+            for (size_t i = start; i < agg.data.list->length; i++) {
+                joy_list_push(result, joy_value_copy(agg.data.list->items[i]));
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_LIST, .data.list = result};
+            PUSH(v);
+            break;
+        }
+        case JOY_QUOTATION: {
+            size_t start = (size_t)n < agg.data.quotation->length ? (size_t)n : agg.data.quotation->length;
+            JoyQuotation* result = joy_quotation_new(agg.data.quotation->length - start);
+            for (size_t i = start; i < agg.data.quotation->length; i++) {
+                joy_quotation_push(result, joy_value_copy(agg.data.quotation->terms[i]));
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_QUOTATION, .data.quotation = result};
+            PUSH(v);
+            break;
+        }
+        case JOY_STRING: {
+            size_t len = strlen(agg.data.string);
+            size_t start = (size_t)n < len ? (size_t)n : len;
+            char* result = strdup(agg.data.string + start);
+            joy_value_free(&agg);
+            PUSH(joy_string(result));
+            free(result);
+            break;
+        }
+        case JOY_SET: {
+            /* Drop first N elements from set (in bit order) */
+            uint64_t set = agg.data.set;
+            uint64_t result = 0;
+            int count = 0;
+            for (int i = 0; i < 64; i++) {
+                if (set & (1ULL << i)) {
+                    if (count >= n) {
+                        result |= (1ULL << i);
+                    }
+                    count++;
+                }
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_SET, .data.set = result};
+            PUSH(v);
+            break;
+        }
+        default:
+            joy_value_free(&agg);
+            joy_error_type("drop", "aggregate", agg.type);
+    }
+}
+
+static void prim_take(JoyContext* ctx) {
+    /* A N -> B : take first N elements from aggregate A */
+    REQUIRE(2, "take");
+    JoyValue nv = POP();
+    JoyValue agg = POP();
+    EXPECT_TYPE(nv, JOY_INTEGER, "take");
+    int64_t n = nv.data.integer;
+    joy_value_free(&nv);
+
+    if (n < 0) {
+        joy_value_free(&agg);
+        joy_error("take: negative count");
+    }
+
+    switch (agg.type) {
+        case JOY_LIST: {
+            size_t count = (size_t)n < agg.data.list->length ? (size_t)n : agg.data.list->length;
+            JoyList* result = joy_list_new(count);
+            for (size_t i = 0; i < count; i++) {
+                joy_list_push(result, joy_value_copy(agg.data.list->items[i]));
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_LIST, .data.list = result};
+            PUSH(v);
+            break;
+        }
+        case JOY_QUOTATION: {
+            size_t count = (size_t)n < agg.data.quotation->length ? (size_t)n : agg.data.quotation->length;
+            JoyQuotation* result = joy_quotation_new(count);
+            for (size_t i = 0; i < count; i++) {
+                joy_quotation_push(result, joy_value_copy(agg.data.quotation->terms[i]));
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_QUOTATION, .data.quotation = result};
+            PUSH(v);
+            break;
+        }
+        case JOY_STRING: {
+            size_t len = strlen(agg.data.string);
+            size_t count = (size_t)n < len ? (size_t)n : len;
+            char* result = malloc(count + 1);
+            strncpy(result, agg.data.string, count);
+            result[count] = '\0';
+            joy_value_free(&agg);
+            PUSH(joy_string(result));
+            free(result);
+            break;
+        }
+        case JOY_SET: {
+            /* Take first N elements from set (in bit order) */
+            uint64_t set = agg.data.set;
+            uint64_t result = 0;
+            int count = 0;
+            for (int i = 0; i < 64 && count < n; i++) {
+                if (set & (1ULL << i)) {
+                    result |= (1ULL << i);
+                    count++;
+                }
+            }
+            joy_value_free(&agg);
+            JoyValue v = {.type = JOY_SET, .data.set = result};
+            PUSH(v);
+            break;
+        }
+        default:
+            joy_value_free(&agg);
+            joy_error_type("take", "aggregate", agg.type);
+    }
 }
 
 static void prim_null(JoyContext* ctx) {
@@ -1695,6 +1916,7 @@ void joy_register_primitives(JoyContext* ctx) {
     JoyDict* d = ctx->dictionary;
 
     /* Stack */
+    joy_dict_define_primitive(d, "id", prim_id);
     joy_dict_define_primitive(d, "dup", prim_dup);
     joy_dict_define_primitive(d, "dup2", prim_dup2);
     joy_dict_define_primitive(d, "pop", prim_pop);
@@ -1747,6 +1969,8 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "and", prim_and);
     joy_dict_define_primitive(d, "or", prim_or);
     joy_dict_define_primitive(d, "not", prim_not);
+    joy_dict_define_primitive(d, "xor", prim_xor);
+    joy_dict_define_primitive(d, "choice", prim_choice);
 
     /* Aggregates */
     joy_dict_define_primitive(d, "first", prim_first);
@@ -1757,6 +1981,9 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "concat", prim_concat);
     joy_dict_define_primitive(d, "swoncat", prim_swoncat);
     joy_dict_define_primitive(d, "size", prim_size);
+    joy_dict_define_primitive(d, "at", prim_at);
+    joy_dict_define_primitive(d, "drop", prim_drop);
+    joy_dict_define_primitive(d, "take", prim_take);
     joy_dict_define_primitive(d, "null", prim_null);
     joy_dict_define_primitive(d, "small", prim_small);
 

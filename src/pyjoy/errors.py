@@ -9,7 +9,7 @@ class JoyError(Exception):
     pass
 
 
-class JoyStackUnderflow(JoyError):
+class JoyStackUnderflowError(JoyError):
     """Raised when a stack operation requires more items than available."""
 
     def __init__(self, operation: str, required: int, available: int):
@@ -19,6 +19,10 @@ class JoyStackUnderflow(JoyError):
         super().__init__(
             f"{operation}: requires {required} items, stack has {available}"
         )
+
+
+# Backwards compatibility alias
+JoyStackUnderflow = JoyStackUnderflowError
 
 
 class JoyTypeError(JoyError):
@@ -37,12 +41,16 @@ class JoyTypeError(JoyError):
             super().__init__(f"{operation}: expected {expected}, got {actual}")
 
 
-class JoyUndefinedWord(JoyError):
+class JoyUndefinedWordError(JoyError):
     """Raised when an undefined word is referenced."""
 
     def __init__(self, word: str):
         self.word = word
         super().__init__(f"Undefined word: {word}")
+
+
+# Backwards compatibility alias
+JoyUndefinedWord = JoyUndefinedWordError
 
 
 class JoySyntaxError(JoyError):
@@ -65,7 +73,7 @@ class JoySetMemberError(JoyError):
         super().__init__(f"Set member {member} out of valid range [0, 63]")
 
 
-class JoyDivisionByZero(JoyError):
+class JoyDivisionByZeroError(JoyError):
     """Raised when attempting to divide by zero."""
 
     def __init__(self, operation: str = "/"):
@@ -73,9 +81,17 @@ class JoyDivisionByZero(JoyError):
         super().__init__(f"{operation}: division by zero")
 
 
-class JoyEmptyAggregate(JoyError):
+# Backwards compatibility alias
+JoyDivisionByZero = JoyDivisionByZeroError
+
+
+class JoyEmptyAggregateError(JoyError):
     """Raised when an operation requires a non-empty aggregate."""
 
     def __init__(self, operation: str):
         self.operation = operation
         super().__init__(f"{operation}: empty aggregate")
+
+
+# Backwards compatibility alias
+JoyEmptyAggregate = JoyEmptyAggregateError
