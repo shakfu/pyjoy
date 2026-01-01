@@ -2,7 +2,7 @@
 
 ## Primitives Coverage
 
-**Current: 86/203 (42%)** + 8 extensions
+**Current: 102/203 (50%)** + 8 extensions
 
 Run `uv run python scripts/check_c_coverage.py` for full report.
 

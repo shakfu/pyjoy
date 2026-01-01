@@ -1910,6 +1910,401 @@ static void prim_false(JoyContext* ctx) {
     PUSH(joy_boolean(false));
 }
 
+static void prim_maxint(JoyContext* ctx) {
+    /* -> I : push maximum integer value */
+    PUSH(joy_integer(INT64_MAX));
+}
+
+static void prim_setsize(JoyContext* ctx) {
+    /* -> I : push size of sets (64) */
+    PUSH(joy_integer(64));
+}
+
+/* ---------- Additional Aggregate Operations ---------- */
+
+static void prim_unswons(JoyContext* ctx) {
+    /* A -> R F : rest and first of aggregate (opposite order of uncons) */
+    REQUIRE(1, "unswons");
+    JoyValue v = POP();
+
+    switch (v.type) {
+        case JOY_LIST: {
+            if (v.data.list->length == 0) joy_error("unswons of empty list");
+            JoyValue first = joy_value_copy(v.data.list->items[0]);
+            JoyList* rest = joy_list_rest(v.data.list);
+            joy_value_free(&v);
+            JoyValue rv = {.type = JOY_LIST, .data.list = rest};
+            PUSH(rv);
+            PUSH(first);
+            break;
+        }
+        case JOY_QUOTATION: {
+            if (v.data.quotation->length == 0) joy_error("unswons of empty quotation");
+            JoyValue first = joy_value_copy(v.data.quotation->terms[0]);
+            JoyQuotation* rest = joy_quotation_new(v.data.quotation->length);
+            for (size_t i = 1; i < v.data.quotation->length; i++) {
+                joy_quotation_push(rest, joy_value_copy(v.data.quotation->terms[i]));
+            }
+            joy_value_free(&v);
+            JoyValue rv = {.type = JOY_QUOTATION, .data.quotation = rest};
+            PUSH(rv);
+            PUSH(first);
+            break;
+        }
+        case JOY_STRING: {
+            if (v.data.string[0] == '\0') joy_error("unswons of empty string");
+            char first = v.data.string[0];
+            char* rest = strdup(v.data.string + 1);
+            joy_value_free(&v);
+            PUSH(joy_string_owned(rest));
+            PUSH(joy_char(first));
+            break;
+        }
+        case JOY_SET: {
+            uint64_t set = v.data.set;
+            if (set == 0) joy_error("unswons of empty set");
+            int first = -1;
+            for (int i = 0; i < 64; i++) {
+                if (set & (1ULL << i)) {
+                    first = i;
+                    break;
+                }
+            }
+            uint64_t rest = set & ~(1ULL << first);
+            joy_value_free(&v);
+            JoyValue rv = {.type = JOY_SET, .data.set = rest};
+            PUSH(rv);
+            PUSH(joy_integer(first));
+            break;
+        }
+        default:
+            joy_value_free(&v);
+            joy_error_type("unswons", "aggregate", v.type);
+    }
+}
+
+static void prim_of(JoyContext* ctx) {
+    /* I A -> X : get element at index I from aggregate A (reverse of at) */
+    REQUIRE(2, "of");
+    JoyValue agg = POP();
+    JoyValue idx = POP();
+    EXPECT_TYPE(idx, JOY_INTEGER, "of");
+    int64_t i = idx.data.integer;
+    joy_value_free(&idx);
+
+    if (i < 0) {
+        joy_value_free(&agg);
+        joy_error("of: negative index");
+    }
+
+    switch (agg.type) {
+        case JOY_LIST:
+            if ((size_t)i >= agg.data.list->length) {
+                joy_value_free(&agg);
+                joy_error("of: index out of bounds");
+            }
+            PUSH(joy_value_copy(agg.data.list->items[i]));
+            break;
+        case JOY_QUOTATION:
+            if ((size_t)i >= agg.data.quotation->length) {
+                joy_value_free(&agg);
+                joy_error("of: index out of bounds");
+            }
+            PUSH(joy_value_copy(agg.data.quotation->terms[i]));
+            break;
+        case JOY_STRING:
+            if ((size_t)i >= strlen(agg.data.string)) {
+                joy_value_free(&agg);
+                joy_error("of: index out of bounds");
+            }
+            PUSH(joy_char(agg.data.string[i]));
+            break;
+        case JOY_SET: {
+            uint64_t set = agg.data.set;
+            int count = 0;
+            for (int j = 0; j < 64; j++) {
+                if (set & (1ULL << j)) {
+                    if (count == i) {
+                        joy_value_free(&agg);
+                        PUSH(joy_integer(j));
+                        return;
+                    }
+                    count++;
+                }
+            }
+            joy_value_free(&agg);
+            joy_error("of: index out of bounds");
+            break;
+        }
+        default:
+            joy_value_free(&agg);
+            joy_error_type("of", "aggregate", agg.type);
+    }
+    joy_value_free(&agg);
+}
+
+/* Helper for compare */
+static int joy_compare_values(JoyValue a, JoyValue b) {
+    /* Compare two values, return -1, 0, or 1 */
+    if (a.type != b.type) {
+        return (a.type < b.type) ? -1 : 1;
+    }
+
+    switch (a.type) {
+        case JOY_INTEGER:
+            if (a.data.integer < b.data.integer) return -1;
+            if (a.data.integer > b.data.integer) return 1;
+            return 0;
+        case JOY_FLOAT:
+            if (a.data.floating < b.data.floating) return -1;
+            if (a.data.floating > b.data.floating) return 1;
+            return 0;
+        case JOY_BOOLEAN:
+            if (a.data.boolean < b.data.boolean) return -1;
+            if (a.data.boolean > b.data.boolean) return 1;
+            return 0;
+        case JOY_CHAR:
+            if (a.data.character < b.data.character) return -1;
+            if (a.data.character > b.data.character) return 1;
+            return 0;
+        case JOY_STRING:
+            return strcmp(a.data.string, b.data.string);
+        case JOY_SET:
+            if (a.data.set < b.data.set) return -1;
+            if (a.data.set > b.data.set) return 1;
+            return 0;
+        case JOY_SYMBOL:
+            return strcmp(a.data.symbol, b.data.symbol);
+        case JOY_LIST: {
+            size_t min_len = a.data.list->length < b.data.list->length
+                           ? a.data.list->length : b.data.list->length;
+            for (size_t i = 0; i < min_len; i++) {
+                int cmp = joy_compare_values(a.data.list->items[i],
+                                             b.data.list->items[i]);
+                if (cmp != 0) return cmp;
+            }
+            if (a.data.list->length < b.data.list->length) return -1;
+            if (a.data.list->length > b.data.list->length) return 1;
+            return 0;
+        }
+        case JOY_QUOTATION: {
+            size_t min_len = a.data.quotation->length < b.data.quotation->length
+                           ? a.data.quotation->length : b.data.quotation->length;
+            for (size_t i = 0; i < min_len; i++) {
+                int cmp = joy_compare_values(a.data.quotation->terms[i],
+                                             b.data.quotation->terms[i]);
+                if (cmp != 0) return cmp;
+            }
+            if (a.data.quotation->length < b.data.quotation->length) return -1;
+            if (a.data.quotation->length > b.data.quotation->length) return 1;
+            return 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+static void prim_compare(JoyContext* ctx) {
+    /* A B -> I : compare A and B, return -1, 0, or 1 */
+    REQUIRE(2, "compare");
+    JoyValue b = POP();
+    JoyValue a = POP();
+    int result = joy_compare_values(a, b);
+    joy_value_free(&a);
+    joy_value_free(&b);
+    PUSH(joy_integer(result));
+}
+
+/* Helper for equal - recursive structural equality */
+static bool joy_equal_values(JoyValue a, JoyValue b) {
+    if (a.type != b.type) return false;
+
+    switch (a.type) {
+        case JOY_INTEGER:
+            return a.data.integer == b.data.integer;
+        case JOY_FLOAT:
+            return a.data.floating == b.data.floating;
+        case JOY_BOOLEAN:
+            return a.data.boolean == b.data.boolean;
+        case JOY_CHAR:
+            return a.data.character == b.data.character;
+        case JOY_STRING:
+            return strcmp(a.data.string, b.data.string) == 0;
+        case JOY_SET:
+            return a.data.set == b.data.set;
+        case JOY_SYMBOL:
+            return strcmp(a.data.symbol, b.data.symbol) == 0;
+        case JOY_LIST:
+            if (a.data.list->length != b.data.list->length) return false;
+            for (size_t i = 0; i < a.data.list->length; i++) {
+                if (!joy_equal_values(a.data.list->items[i],
+                                      b.data.list->items[i])) {
+                    return false;
+                }
+            }
+            return true;
+        case JOY_QUOTATION:
+            if (a.data.quotation->length != b.data.quotation->length) return false;
+            for (size_t i = 0; i < a.data.quotation->length; i++) {
+                if (!joy_equal_values(a.data.quotation->terms[i],
+                                      b.data.quotation->terms[i])) {
+                    return false;
+                }
+            }
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void prim_equal(JoyContext* ctx) {
+    /* T U -> B : test if T and U are structurally equal */
+    REQUIRE(2, "equal");
+    JoyValue b = POP();
+    JoyValue a = POP();
+    bool result = joy_equal_values(a, b);
+    joy_value_free(&a);
+    joy_value_free(&b);
+    PUSH(joy_boolean(result));
+}
+
+static void prim_in(JoyContext* ctx) {
+    /* X A -> B : test if X is a member of aggregate A */
+    REQUIRE(2, "in");
+    JoyValue agg = POP();
+    JoyValue x = POP();
+    bool found = false;
+
+    switch (agg.type) {
+        case JOY_LIST:
+            for (size_t i = 0; i < agg.data.list->length; i++) {
+                if (joy_equal_values(x, agg.data.list->items[i])) {
+                    found = true;
+                    break;
+                }
+            }
+            break;
+        case JOY_QUOTATION:
+            for (size_t i = 0; i < agg.data.quotation->length; i++) {
+                if (joy_equal_values(x, agg.data.quotation->terms[i])) {
+                    found = true;
+                    break;
+                }
+            }
+            break;
+        case JOY_STRING:
+            if (x.type == JOY_CHAR) {
+                found = strchr(agg.data.string, x.data.character) != NULL;
+            } else if (x.type == JOY_STRING) {
+                found = strstr(agg.data.string, x.data.string) != NULL;
+            }
+            break;
+        case JOY_SET:
+            if (x.type == JOY_INTEGER) {
+                int64_t n = x.data.integer;
+                if (n >= 0 && n < 64) {
+                    found = (agg.data.set & (1ULL << n)) != 0;
+                }
+            }
+            break;
+        default:
+            joy_value_free(&x);
+            joy_value_free(&agg);
+            joy_error_type("in", "aggregate", agg.type);
+    }
+
+    joy_value_free(&x);
+    joy_value_free(&agg);
+    PUSH(joy_boolean(found));
+}
+
+static void prim_name(JoyContext* ctx) {
+    /* sym -> "sym" : convert symbol to its name string */
+    REQUIRE(1, "name");
+    JoyValue v = POP();
+
+    switch (v.type) {
+        case JOY_SYMBOL: {
+            char* s = strdup(v.data.symbol);
+            joy_value_free(&v);
+            PUSH(joy_string_owned(s));
+            break;
+        }
+        case JOY_INTEGER:
+            joy_value_free(&v);
+            PUSH(joy_string("integer"));
+            break;
+        case JOY_FLOAT:
+            joy_value_free(&v);
+            PUSH(joy_string("float"));
+            break;
+        case JOY_BOOLEAN:
+            joy_value_free(&v);
+            PUSH(joy_string("boolean"));
+            break;
+        case JOY_CHAR:
+            joy_value_free(&v);
+            PUSH(joy_string("char"));
+            break;
+        case JOY_STRING:
+            joy_value_free(&v);
+            PUSH(joy_string("string"));
+            break;
+        case JOY_LIST:
+            joy_value_free(&v);
+            PUSH(joy_string("list"));
+            break;
+        case JOY_SET:
+            joy_value_free(&v);
+            PUSH(joy_string("set"));
+            break;
+        case JOY_QUOTATION:
+            joy_value_free(&v);
+            PUSH(joy_string("quotation"));
+            break;
+        default:
+            joy_value_free(&v);
+            PUSH(joy_string("unknown"));
+    }
+}
+
+static void prim_intern(JoyContext* ctx) {
+    /* "sym" -> sym : convert string to symbol */
+    REQUIRE(1, "intern");
+    JoyValue v = POP();
+    EXPECT_TYPE(v, JOY_STRING, "intern");
+    PUSH(joy_symbol(v.data.string));
+    joy_value_free(&v);
+}
+
+static void prim_body(JoyContext* ctx) {
+    /* U -> [P] : get body of user-defined symbol */
+    REQUIRE(1, "body");
+    JoyValue v = POP();
+    EXPECT_TYPE(v, JOY_SYMBOL, "body");
+
+    /* Look up the symbol in the dictionary */
+    JoyWord* word = joy_dict_lookup(ctx->dictionary, v.data.symbol);
+    if (!word) {
+        joy_value_free(&v);
+        joy_error("body: undefined symbol");
+    }
+
+    if (word->is_primitive) {
+        /* Primitives have no body - return empty quotation */
+        joy_value_free(&v);
+        JoyQuotation* q = joy_quotation_new(0);
+        JoyValue result = {.type = JOY_QUOTATION, .data.quotation = q};
+        PUSH(result);
+    } else {
+        /* User-defined word - copy its quotation body */
+        JoyQuotation* body_copy = joy_quotation_copy(word->body.quotation);
+        joy_value_free(&v);
+        JoyValue result = {.type = JOY_QUOTATION, .data.quotation = body_copy};
+        PUSH(result);
+    }
+}
+
 /* ---------- Registration ---------- */
 
 void joy_register_primitives(JoyContext* ctx) {
@@ -2044,4 +2439,16 @@ void joy_register_primitives(JoyContext* ctx) {
     /* Constants */
     joy_dict_define_primitive(d, "true", prim_true);
     joy_dict_define_primitive(d, "false", prim_false);
+    joy_dict_define_primitive(d, "maxint", prim_maxint);
+    joy_dict_define_primitive(d, "setsize", prim_setsize);
+
+    /* Additional aggregate operations */
+    joy_dict_define_primitive(d, "unswons", prim_unswons);
+    joy_dict_define_primitive(d, "of", prim_of);
+    joy_dict_define_primitive(d, "compare", prim_compare);
+    joy_dict_define_primitive(d, "equal", prim_equal);
+    joy_dict_define_primitive(d, "in", prim_in);
+    joy_dict_define_primitive(d, "name", prim_name);
+    joy_dict_define_primitive(d, "intern", prim_intern);
+    joy_dict_define_primitive(d, "body", prim_body);
 }

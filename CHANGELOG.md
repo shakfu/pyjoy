@@ -22,9 +22,19 @@
 - `over`: X Y -> X Y X (copy second item to top)
 - `dup2`: X Y -> X Y X Y (duplicate top two items)
 - `newline`: Print newline (alias for `.`)
+- `unswons`: A -> R F (rest and first, opposite of uncons)
+- `of`: I A -> X (get element at index, reverse arg order of `at`)
+- `compare`: A B -> I (compare values, return -1/0/1)
+- `equal`: T U -> B (recursive structural equality test)
+- `in`: X A -> B (membership test)
+- `name`: sym -> "sym" (symbol/type to string)
+- `intern`: "sym" -> sym (string to symbol)
+- `body`: U -> [P] (get body of user-defined word)
+- `maxint`: -> I (push maximum integer value)
+- `setsize`: -> I (push set size, 64)
 
 ### Coverage
-- C backend: 92/203 primitives (45%)
+- C backend: 102/203 primitives (50%)
 
 ### Tests
 - jp-nestrec.joy now runs to completion with all tests passing

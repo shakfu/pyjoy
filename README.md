@@ -12,3 +12,85 @@ The primary aim of this project is to [implement the Joy language in python3](do
 > welcome if somebody were to take up the task." [A Conversation with Manfred von Thun](https://www.nsl.com/papers/interview.htm)
 
 There's also a sister [pyjoy2](https://github.com/shakfu/pyjoy2) project which has the different aim of Pythonically re-imagining the Joy language, without adherence to the requirement of running existing Joy programs.
+
+## Building
+
+Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+
+```bash
+# Clone the repository
+git clone https://github.com/shakfu/pyjoy.git
+cd pyjoy
+
+# Install dependencies
+make sync
+
+# Run tests
+make test
+
+# Check code quality
+make lint
+make typecheck
+```
+
+For C compilation, you'll also need `gcc` or `clang`.
+
+## Usage
+
+### Interactive REPL
+
+```bash
+# Start the Joy REPL
+make repl
+# or
+uv run python -m pyjoy
+```
+
+Example session:
+```
+Joy> 2 3 + .
+5
+Joy> [1 2 3] [dup *] map .
+[1 4 9]
+Joy> quit
+```
+
+### Execute Joy Files
+
+```bash
+# Run a Joy source file
+uv run python -m pyjoy examples/factorial.joy
+
+# Evaluate an expression
+uv run python -m pyjoy -e "5 [1] [*] primrec ."
+```
+
+### Compile to C
+
+```bash
+# Compile Joy source to executable
+uv run python -m pyjoy compile program.joy -o build -n myprogram
+
+# Run the compiled program
+./build/myprogram
+
+# Or compile and run in one step
+uv run python -m pyjoy compile program.joy -o build -n myprogram --run
+```
+
+## Status
+
+- **C Backend Coverage:** 102/203 primitives (50%) + 8 extensions
+- **Python Interpreter:** Full Joy language support
+- **Compilation:** Joy source to C executable via `pyjoy compile`
+- **Tests:** 411 pytest tests passing
+
+### Recent Additions
+
+- Recursive combinators: `condlinrec`, `condnestrec`, `linrec`, `genrec`, `primrec`
+- Aggregate operations: `unswons`, `of`, `at`, `drop`, `take`, `in`, `compare`, `equal`
+- Set operations: `xor`, `and`, `or`, `not` (with proper set semantics)
+- Symbol operations: `name`, `intern`, `body`
+- Constants: `maxint`, `setsize`
+
+Run `uv run python scripts/check_c_coverage.py` for the full coverage report.

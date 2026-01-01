@@ -994,7 +994,7 @@ be defined as `uncons pop` and `uncons swap pop`. Other list operators
 and the `map`, `fold` and `filter` combinators can now be defined
 without recursion using `x` or `y`.
 
-# Concluding remarks
+## Concluding remarks
 
 In all aspects Joy is still in its infancy and cannot compete with the
 mature languages.
