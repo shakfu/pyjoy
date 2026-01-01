@@ -2,7 +2,7 @@
 
 ## Primitives Coverage
 
-**Current: 196/203 (96%)** + 8 extensions
+**Current: 198/203 (97%)** + 8 extensions
 
 Run `uv run python scripts/check_c_coverage.py` for full report.
 
@@ -17,14 +17,7 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 
 ---
 
-## Remaining Primitives (7)
-
-### Operand (2)
-
-| Primitive | Signature | Description |
-|-----------|-----------|-------------|
-| `conts` | `-> [[P] [Q] ..]` | Push continuation stack |
-| `undefs` | `->` | Push list of undefined symbols |
+## Remaining Primitives (5)
 
 ### Miscellaneous Commands (5)
 
@@ -35,6 +28,21 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 | `manual` | `->` | Display full manual |
 | `get` | `-> F` | Read factor from input |
 | `include` | `"filnam.ext" ->` | Include Joy source file |
+
+---
+
+## Future Enhancements
+
+### Compile-time `include` Support
+
+Currently `include` cannot be meaningfully implemented as a runtime primitive in compiled code (no Joy parser available at runtime). To support `include`:
+
+1. Modify the Python compiler/converter to detect `include` calls with string literals
+2. Read and parse the included Joy source file at compile time
+3. Inline the included definitions into the generated C code
+4. Handle recursive includes and circular dependency detection
+
+This would allow Joy programs using `include` to compile correctly.
 
 ---
 

@@ -4249,6 +4249,21 @@ static void prim_echo(JoyContext* ctx) {
     PUSH(joy_integer(ctx->echo));
 }
 
+static void prim_conts(JoyContext* ctx) {
+    /* -> [[P] [Q] ..] : push continuation stack (empty in compiled code) */
+    /* In compiled code, there's no continuation stack - execution is direct */
+    JoyValue empty = {.type = JOY_LIST, .data.list = joy_list_new(0)};
+    PUSH(empty);
+}
+
+static void prim_undefs(JoyContext* ctx) {
+    /* -> [S1 S2 ..] : push list of undefined symbols (empty in compiled code) */
+    /* In compiled code, all symbols are resolved at compile time */
+    (void)ctx;
+    JoyValue empty = {.type = JOY_LIST, .data.list = joy_list_new(0)};
+    PUSH(empty);
+}
+
 /* ---------- Registration ---------- */
 
 void joy_register_primitives(JoyContext* ctx) {
@@ -4497,6 +4512,8 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "autoput", prim_autoput);
     joy_dict_define_primitive(d, "undeferror", prim_undeferror);
     joy_dict_define_primitive(d, "echo", prim_echo);
+    joy_dict_define_primitive(d, "conts", prim_conts);
+    joy_dict_define_primitive(d, "undefs", prim_undefs);
 
     /* File I/O */
     joy_dict_define_primitive(d, "fopen", prim_fopen);
