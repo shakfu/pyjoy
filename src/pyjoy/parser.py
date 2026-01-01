@@ -84,6 +84,10 @@ class Parser:
             if token and token.type == "DEFINE_KW":
                 defs = self._parse_definition_block()
                 definitions.extend(defs)
+            # Check for HIDE block
+            elif token and token.type == "HIDE_KW":
+                defs = self._parse_hide_block()
+                definitions.extend(defs)
             else:
                 # Parse regular terms
                 term = self._parse_term()
@@ -215,6 +219,109 @@ class Parser:
 
         return definitions
 
+    def _parse_hide_block(self) -> List[Definition]:
+        """
+        Parse a HIDE/IN/END block.
+
+        Syntax:
+            HIDE
+                hidden_name == hidden_body;
+                ...
+            IN
+                public_name == public_body;
+                ...
+            END.
+
+        Hidden definitions are included but could be filtered later.
+        For now, we include all definitions (both hidden and public).
+
+        Returns:
+            List of Definition objects (both hidden and public)
+        """
+        self._advance()  # Consume HIDE
+
+        definitions: List[Definition] = []
+
+        # Parse hidden definitions until IN
+        while True:
+            token = self._current()
+            if token is None:
+                break
+
+            if token.type == "IN_KW":
+                self._advance()
+                break
+
+            if token.type == "END_KW":
+                self._advance()
+                # Check for trailing period
+                token = self._current()
+                if token and token.type == "PERIOD":
+                    self._advance()
+                return definitions
+
+            if token.type == "SYMBOL":
+                # Parse a definition
+                name = token.value
+                self._advance()
+
+                token = self._current()
+                if token is None or token.type != "DEF_OP":
+                    continue
+                self._advance()
+
+                body_terms = self._parse_terms(
+                    {"SEMICOLON", "IN_KW", "END_KW", "PERIOD"}
+                )
+                body = JoyQuotation(tuple(body_terms))
+                definitions.append(Definition(name, body))
+
+                token = self._current()
+                if token and token.type == "SEMICOLON":
+                    self._advance()
+            else:
+                # Skip other tokens in HIDE section
+                self._advance()
+
+        # Parse public definitions until END
+        while True:
+            token = self._current()
+            if token is None:
+                break
+
+            if token.type == "END_KW":
+                self._advance()
+                # Check for trailing period
+                token = self._current()
+                if token and token.type == "PERIOD":
+                    self._advance()
+                break
+
+            if token.type == "SYMBOL":
+                # Parse a definition
+                name = token.value
+                self._advance()
+
+                token = self._current()
+                if token is None or token.type != "DEF_OP":
+                    continue
+                self._advance()
+
+                body_terms = self._parse_terms(
+                    {"SEMICOLON", "END_KW", "PERIOD"}
+                )
+                body = JoyQuotation(tuple(body_terms))
+                definitions.append(Definition(name, body))
+
+                token = self._current()
+                if token and token.type == "SEMICOLON":
+                    self._advance()
+            else:
+                # Skip other tokens
+                self._advance()
+
+        return definitions
+
     def _parse_term(self) -> Any:
         """
         Parse a single term.
@@ -271,7 +378,15 @@ class Parser:
             self._advance()
             return _SKIP
 
-        elif token.type in ("DEFINE_KW", "PUBLIC_KW", "PRIVATE_KW", "END_KW"):
+        elif token.type in (
+            "DEFINE_KW",
+            "PUBLIC_KW",
+            "PRIVATE_KW",
+            "END_KW",
+            "HIDE_KW",
+            "IN_KW",
+            "MODULE_KW",
+        ):
             # Keywords - skip when encountered outside definition context
             self._advance()
             return _SKIP

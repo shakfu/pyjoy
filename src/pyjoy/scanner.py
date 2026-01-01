@@ -45,9 +45,12 @@ class Scanner:
         ("DEF_OP", r"=="),  # == (definition operator)
         # Keywords must come before SYMBOL to match first
         ("DEFINE_KW", r"\b(?:DEFINE|LIBRA)\b"),  # DEFINE or LIBRA keyword
+        ("HIDE_KW", r"\bHIDE\b"),  # HIDE keyword
+        ("IN_KW", r"\bIN\b"),  # IN keyword
         ("PUBLIC_KW", r"\bPUBLIC\b"),  # PUBLIC keyword
         ("PRIVATE_KW", r"\bPRIVATE\b"),  # PRIVATE keyword
         ("END_KW", r"\bEND\b"),  # END keyword
+        ("MODULE_KW", r"\bMODULE\b"),  # MODULE keyword
         # Word: identifier or operator symbols
         ("SYMBOL", r"[a-zA-Z_][a-zA-Z0-9_\-]*|[+\-*/<=>&|!?@#$%^~:]+"),
         ("WHITESPACE", r"\s+"),  # whitespace

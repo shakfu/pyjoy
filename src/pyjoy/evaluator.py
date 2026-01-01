@@ -270,11 +270,16 @@ def unstack(ctx: ExecutionContext) -> None:
 
 @joy_word(name="i", params=1, doc="[P] -> ...")
 def i_combinator(ctx: ExecutionContext) -> None:
-    """Execute quotation."""
+    """Execute quotation or list."""
     quot = ctx.stack.pop()
-    if quot.type != JoyType.QUOTATION:
+    if quot.type == JoyType.QUOTATION:
+        ctx.evaluator.execute(quot.value)
+    elif quot.type == JoyType.LIST:
+        # Treat list as quotation - execute each element
+        for term in quot.value:
+            ctx.evaluator._execute_term(term)
+    else:
         raise JoyTypeError("i", "QUOTATION", quot.type.name)
-    ctx.evaluator.execute(quot.value)
 
 
 # I/O (minimal for Phase 1)
@@ -868,10 +873,14 @@ def is_logical(ctx: ExecutionContext) -> None:
 
 
 def _expect_quotation(v: JoyValue, op: str) -> JoyQuotation:
-    """Extract quotation, raising error if not a quotation."""
-    if v.type != JoyType.QUOTATION:
+    """Extract quotation, raising error if not a quotation or list."""
+    if v.type == JoyType.QUOTATION:
+        return v.value
+    elif v.type == JoyType.LIST:
+        # Convert list to quotation for execution
+        return JoyQuotation(v.value)
+    else:
         raise JoyTypeError(op, "QUOTATION", v.type.name)
-    return v.value
 
 
 @joy_word(name="x", params=1, doc="[P] -> ... [P]")
@@ -2158,3 +2167,214 @@ def name_(ctx: ExecutionContext) -> None:
         ctx.stack.push_value(JoyValue.string(a.value))
     else:
         ctx.stack.push_value(JoyValue.string(repr(a)))
+
+
+# ============================================================================
+# Phase 7 - Standard Library Support
+# ============================================================================
+
+
+@joy_word(name="include", params=1, doc="S ->")
+def include_(ctx: ExecutionContext) -> None:
+    """Load and execute a Joy file."""
+    import os
+
+    filename = ctx.stack.pop()
+    if filename.type != JoyType.STRING:
+        raise JoyTypeError("include", "STRING", filename.type.name)
+
+    path = filename.value
+
+    # Try to find the file
+    search_paths = [
+        os.path.dirname(os.path.abspath(path)),  # Relative to current dir
+        os.getcwd(),  # Current working directory
+    ]
+
+    # Add stdlib path
+    stdlib_path = os.path.join(os.path.dirname(__file__), "stdlib")
+    if os.path.exists(stdlib_path):
+        search_paths.append(stdlib_path)
+
+    # Try to read the file
+    file_path = None
+    if os.path.isabs(path):
+        if os.path.exists(path):
+            file_path = path
+    else:
+        for search_dir in search_paths:
+            candidate = os.path.join(search_dir, path)
+            if os.path.exists(candidate):
+                file_path = candidate
+                break
+        if file_path is None and os.path.exists(path):
+            file_path = path
+
+    if file_path is None:
+        raise JoyUndefinedWord(f"include: file not found: {path}")
+
+    with open(file_path, "r") as f:
+        source = f.read()
+
+    # Parse and execute
+    from pyjoy.parser import Parser
+
+    parser = Parser()
+    result = parser.parse_full(source)
+
+    # Register definitions
+    for defn in result.definitions:
+        ctx.evaluator.define(defn.name, defn.body)
+
+    # Execute program
+    ctx.evaluator.execute(result.program)
+
+
+@joy_word(name="body", params=1, doc="U -> [P]")
+def body_(ctx: ExecutionContext) -> None:
+    """Get the body of a user-defined word (or [] if undefined/primitive)."""
+    u = ctx.stack.pop()
+    if u.type == JoyType.SYMBOL:
+        name = u.value
+    elif u.type == JoyType.STRING:
+        name = u.value
+    else:
+        # For other types, return empty quotation
+        ctx.stack.push_value(JoyValue.quotation(JoyQuotation(())))
+        return
+
+    # Check if it's a user definition
+    if name in ctx.evaluator.definitions:
+        ctx.stack.push_value(JoyValue.quotation(ctx.evaluator.definitions[name]))
+    else:
+        # Primitive or undefined - return empty quotation
+        ctx.stack.push_value(JoyValue.quotation(JoyQuotation(())))
+
+
+@joy_word(name="chr", params=1, doc="I -> C")
+def chr_(ctx: ExecutionContext) -> None:
+    """Convert integer to character."""
+    n = ctx.stack.pop()
+    if n.type != JoyType.INTEGER:
+        raise JoyTypeError("chr", "INTEGER", n.type.name)
+    ctx.stack.push_value(JoyValue.char(chr(n.value)))
+
+
+@joy_word(name="drop", params=2, doc="A N -> A'")
+def drop_(ctx: ExecutionContext) -> None:
+    """Drop first N elements from aggregate."""
+    n = ctx.stack.pop()
+    a = ctx.stack.pop()
+
+    if n.type != JoyType.INTEGER:
+        raise JoyTypeError("drop", "INTEGER", n.type.name)
+
+    count = n.value
+
+    if a.type == JoyType.LIST:
+        result = a.value[count:] if count < len(a.value) else ()
+        ctx.stack.push_value(JoyValue.list(result))
+    elif a.type == JoyType.QUOTATION:
+        # Treat quotation as list
+        terms = a.value.terms
+        result = terms[count:] if count < len(terms) else ()
+        ctx.stack.push_value(JoyValue.quotation(JoyQuotation(result)))
+    elif a.type == JoyType.STRING:
+        result = a.value[count:] if count < len(a.value) else ""
+        ctx.stack.push_value(JoyValue.string(result))
+    elif a.type == JoyType.SET:
+        # Sets don't have order, so drop doesn't really make sense
+        # But for compatibility, treat as sorted list
+        sorted_items = sorted(a.value)
+        result = frozenset(sorted_items[count:]) if count < len(sorted_items) else frozenset()
+        ctx.stack.push_value(JoyValue.joy_set(result))
+    else:
+        raise JoyTypeError("drop", "aggregate", a.type.name)
+
+
+@joy_word(name="localtime", params=1, doc="I -> [I I I I I I B I I]")
+def localtime_(ctx: ExecutionContext) -> None:
+    """Convert epoch time to local time list [year month day hour min sec isdst yday wday]."""
+    import time as time_module
+
+    t = ctx.stack.pop()
+    if t.type != JoyType.INTEGER:
+        raise JoyTypeError("localtime", "INTEGER", t.type.name)
+
+    tm = time_module.localtime(t.value)
+    result = (
+        JoyValue.integer(tm.tm_year),
+        JoyValue.integer(tm.tm_mon),
+        JoyValue.integer(tm.tm_mday),
+        JoyValue.integer(tm.tm_hour),
+        JoyValue.integer(tm.tm_min),
+        JoyValue.integer(tm.tm_sec),
+        JoyValue.boolean(bool(tm.tm_isdst)),
+        JoyValue.integer(tm.tm_yday),
+        JoyValue.integer(tm.tm_wday),
+    )
+    ctx.stack.push_value(JoyValue.list(result))
+
+
+@joy_word(name="gmtime", params=1, doc="I -> [I I I I I I B I I]")
+def gmtime_(ctx: ExecutionContext) -> None:
+    """Convert epoch time to UTC time list [year month day hour min sec isdst yday wday]."""
+    import time as time_module
+
+    t = ctx.stack.pop()
+    if t.type != JoyType.INTEGER:
+        raise JoyTypeError("gmtime", "INTEGER", t.type.name)
+
+    tm = time_module.gmtime(t.value)
+    result = (
+        JoyValue.integer(tm.tm_year),
+        JoyValue.integer(tm.tm_mon),
+        JoyValue.integer(tm.tm_mday),
+        JoyValue.integer(tm.tm_hour),
+        JoyValue.integer(tm.tm_min),
+        JoyValue.integer(tm.tm_sec),
+        JoyValue.boolean(bool(tm.tm_isdst)),
+        JoyValue.integer(tm.tm_yday),
+        JoyValue.integer(tm.tm_wday),
+    )
+    ctx.stack.push_value(JoyValue.list(result))
+
+
+@joy_word(name="maxint", params=0, doc="-> I")
+def maxint_(ctx: ExecutionContext) -> None:
+    """Push maximum integer value."""
+    import sys
+
+    ctx.stack.push_value(JoyValue.integer(sys.maxsize))
+
+
+@joy_word(name="setautoput", params=1, doc="I ->")
+def setautoput_(ctx: ExecutionContext) -> None:
+    """Set autoput mode (stub - pops and ignores for compatibility)."""
+    ctx.stack.pop()
+
+
+@joy_word(name="setundeferror", params=1, doc="I ->")
+def setundeferror_(ctx: ExecutionContext) -> None:
+    """Set undefined error mode (stub - pops and ignores for compatibility)."""
+    ctx.stack.pop()
+
+
+@joy_word(name="rollupd", params=4, doc="X Y Z W -> Y Z X W")
+def rollupd_(ctx: ExecutionContext) -> None:
+    """Rollup under top element."""
+    w, z, y, x = ctx.stack.pop_n(4)
+    ctx.stack.push_value(y)
+    ctx.stack.push_value(z)
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(w)
+
+
+@joy_word(name="rolldownd", params=4, doc="X Y Z W -> Z X Y W")
+def rolldownd_(ctx: ExecutionContext) -> None:
+    """Rolldown under top element."""
+    w, z, y, x = ctx.stack.pop_n(4)
+    ctx.stack.push_value(z)
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
+    ctx.stack.push_value(w)
