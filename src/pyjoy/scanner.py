@@ -35,7 +35,7 @@ class Scanner:
         ("FLOAT", r"-?\d+\.\d+(?:[eE][+-]?\d+)?"),  # 3.14, -2.5e10
         ("INTEGER", r"-?\d+"),  # 42, -17
         ("STRING", r'"(?:[^"\\]|\\.)*"'),  # "hello"
-        ("CHAR", r"'(?:[^'\\]|\\.)'"),  # 'x', '\n'
+        ("CHAR", r"'(?:[^'\\]|\\.)'|'(?:[^'\s\\]|\\.)"),  # 'x' or 'x (Joy-style)
         ("LBRACKET", r"\["),  # [
         ("RBRACKET", r"\]"),  # ]
         ("LBRACE", r"\{"),  # {
@@ -103,7 +103,11 @@ class Scanner:
             elif kind == "STRING":
                 value = self._unescape_string(value[1:-1])
             elif kind == "CHAR":
-                value = self._unescape_char(value[1:-1])
+                # Handle both 'x' and 'x (Joy-style without closing quote)
+                if value.endswith("'") and len(value) > 2:
+                    value = self._unescape_char(value[1:-1])
+                else:
+                    value = self._unescape_char(value[1:])
 
             yield Token(kind, value, line, column)
 
