@@ -11,6 +11,7 @@ Analysis and design document for reimplementing Joy in Python 3 with Python func
 3. **Interoperability**: Enable Joy programs to call Python and vice versa
 4. **Simplicity**: Leverage Python's features for cleaner implementation
 5. **Performance**: Acceptable performance for interactive use (not C-speed)
+6. **C code emitter**: Generate c code which could then be compiled into machine code
 
 ### 1.2 Non-Goals
 

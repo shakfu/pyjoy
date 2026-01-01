@@ -708,20 +708,40 @@ def unswons(ctx: ExecutionContext) -> None:
     ctx.stack.push_value(items[0])
 
 
-@joy_word(name="null", params=1, doc="A -> B")
+@joy_word(name="null", params=1, doc="X -> B")
 def null(ctx: ExecutionContext) -> None:
-    """Test if aggregate is empty."""
-    agg = ctx.stack.pop()
-    items = _get_aggregate(agg, "null")
-    ctx.stack.push_value(JoyValue.boolean(len(items) == 0))
+    """Test if aggregate is empty or numeric is zero."""
+    x = ctx.stack.pop()
+    if x.type in (JoyType.INTEGER, JoyType.FLOAT):
+        result = x.value == 0
+    elif x.type == JoyType.BOOLEAN:
+        result = not x.value
+    elif x.type == JoyType.CHAR:
+        result = ord(x.value) == 0
+    elif x.type in (JoyType.LIST, JoyType.QUOTATION, JoyType.STRING, JoyType.SET):
+        items = _get_aggregate(x, "null")
+        result = len(items) == 0
+    else:
+        result = False
+    ctx.stack.push_value(JoyValue.boolean(result))
 
 
-@joy_word(name="small", params=1, doc="A -> B")
+@joy_word(name="small", params=1, doc="X -> B")
 def small(ctx: ExecutionContext) -> None:
-    """Test if aggregate has 0 or 1 elements."""
-    agg = ctx.stack.pop()
-    items = _get_aggregate(agg, "small")
-    ctx.stack.push_value(JoyValue.boolean(len(items) <= 1))
+    """Test if aggregate has 0 or 1 elements, or numeric < 2."""
+    x = ctx.stack.pop()
+    if x.type in (JoyType.INTEGER, JoyType.FLOAT):
+        result = x.value < 2
+    elif x.type == JoyType.BOOLEAN:
+        result = True  # true and false are both "small"
+    elif x.type == JoyType.CHAR:
+        result = ord(x.value) < 2
+    elif x.type in (JoyType.LIST, JoyType.QUOTATION, JoyType.STRING, JoyType.SET):
+        items = _get_aggregate(x, "small")
+        result = len(items) <= 1
+    else:
+        result = False
+    ctx.stack.push_value(JoyValue.boolean(result))
 
 
 @joy_word(name="size", params=1, doc="A -> N")
@@ -822,3 +842,816 @@ def is_logical(ctx: ExecutionContext) -> None:
     """Test if X is a boolean."""
     x = ctx.stack.pop()
     ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.BOOLEAN))
+
+
+# ============================================================================
+# Phase 3: Higher-Order Operations (Combinators)
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Execution Combinators
+# ----------------------------------------------------------------------------
+
+
+def _expect_quotation(v: JoyValue, op: str) -> JoyQuotation:
+    """Extract quotation, raising error if not a quotation."""
+    if v.type != JoyType.QUOTATION:
+        raise JoyTypeError(op, "QUOTATION", v.type.name)
+    return v.value
+
+
+@joy_word(name="x", params=1, doc="[P] -> ... [P]")
+def x_combinator(ctx: ExecutionContext) -> None:
+    """Execute quotation without consuming it."""
+    quot = ctx.stack.peek()
+    q = _expect_quotation(quot, "x")
+    ctx.evaluator.execute(q)
+
+
+@joy_word(name="dip", params=2, doc="X [P] -> ... X")
+def dip(ctx: ExecutionContext) -> None:
+    """Execute P with X temporarily removed, then restore X."""
+    quot, x = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "dip")
+    ctx.evaluator.execute(q)
+    ctx.stack.push_value(x)
+
+
+@joy_word(name="dipd", params=3, doc="X Y [P] -> ... X Y")
+def dipd(ctx: ExecutionContext) -> None:
+    """Execute P with X and Y temporarily removed."""
+    quot, y, x = ctx.stack.pop_n(3)
+    q = _expect_quotation(quot, "dipd")
+    ctx.evaluator.execute(q)
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
+
+
+@joy_word(name="dipdd", params=4, doc="X Y Z [P] -> ... X Y Z")
+def dipdd(ctx: ExecutionContext) -> None:
+    """Execute P with X, Y, Z temporarily removed."""
+    quot, z, y, x = ctx.stack.pop_n(4)
+    q = _expect_quotation(quot, "dipdd")
+    ctx.evaluator.execute(q)
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
+    ctx.stack.push_value(z)
+
+
+@joy_word(name="keep", params=2, doc="X [P] -> ... X")
+def keep(ctx: ExecutionContext) -> None:
+    """Execute P on X, then restore X."""
+    quot, x = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "keep")
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+    ctx.stack.push_value(x)
+
+
+@joy_word(name="nullary", params=1, doc="[P] -> X")
+def nullary(ctx: ExecutionContext) -> None:
+    """Execute P, save result, restore original stack, push result."""
+    quot = ctx.stack.pop()
+    q = _expect_quotation(quot, "nullary")
+    saved = ctx.stack._items.copy()
+    ctx.evaluator.execute(q)
+    result = ctx.stack.pop()
+    ctx.stack._items = saved
+    ctx.stack.push_value(result)
+
+
+@joy_word(name="unary", params=2, doc="X [P] -> R")
+def unary(ctx: ExecutionContext) -> None:
+    """Execute P on X, save result, restore stack below X, push result."""
+    quot, x = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "unary")
+    saved = ctx.stack._items.copy()
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+    result = ctx.stack.pop()
+    ctx.stack._items = saved
+    ctx.stack.push_value(result)
+
+
+@joy_word(name="binary", params=3, doc="X Y [P] -> R")
+def binary(ctx: ExecutionContext) -> None:
+    """Execute P on X and Y, save result, restore stack, push result."""
+    quot, y, x = ctx.stack.pop_n(3)
+    q = _expect_quotation(quot, "binary")
+    saved = ctx.stack._items.copy()
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
+    ctx.evaluator.execute(q)
+    result = ctx.stack.pop()
+    ctx.stack._items = saved
+    ctx.stack.push_value(result)
+
+
+@joy_word(name="ternary", params=4, doc="X Y Z [P] -> R")
+def ternary(ctx: ExecutionContext) -> None:
+    """Execute P on X, Y, Z, save result, restore stack, push result."""
+    quot, z, y, x = ctx.stack.pop_n(4)
+    q = _expect_quotation(quot, "ternary")
+    saved = ctx.stack._items.copy()
+    ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
+    ctx.stack.push_value(z)
+    ctx.evaluator.execute(q)
+    result = ctx.stack.pop()
+    ctx.stack._items = saved
+    ctx.stack.push_value(result)
+
+
+# ----------------------------------------------------------------------------
+# Conditional Combinators
+# ----------------------------------------------------------------------------
+
+
+@joy_word(name="ifte", params=3, doc="[B] [T] [F] -> ...")
+def ifte(ctx: ExecutionContext) -> None:
+    """If-then-else: execute B, if true execute T, else execute F."""
+    f_quot, t_quot, b_quot = ctx.stack.pop_n(3)
+    b = _expect_quotation(b_quot, "ifte")
+    t = _expect_quotation(t_quot, "ifte")
+    f = _expect_quotation(f_quot, "ifte")
+
+    # Save stack state
+    saved = ctx.stack._items.copy()
+
+    # Execute condition
+    ctx.evaluator.execute(b)
+    test_result = ctx.stack.pop()
+
+    # Restore stack
+    ctx.stack._items = saved
+
+    # Execute appropriate branch
+    if test_result.is_truthy():
+        ctx.evaluator.execute(t)
+    else:
+        ctx.evaluator.execute(f)
+
+
+@joy_word(name="branch", params=3, doc="B [T] [F] -> ...")
+def branch(ctx: ExecutionContext) -> None:
+    """If B is true execute T, else execute F."""
+    f_quot, t_quot, b = ctx.stack.pop_n(3)
+    t = _expect_quotation(t_quot, "branch")
+    f = _expect_quotation(f_quot, "branch")
+
+    if b.is_truthy():
+        ctx.evaluator.execute(t)
+    else:
+        ctx.evaluator.execute(f)
+
+
+@joy_word(name="cond", params=1, doc="[[B1 T1] [B2 T2] ... [Bn Tn] [D]] -> ...")
+def cond(ctx: ExecutionContext) -> None:
+    """Multi-way conditional. Each clause is [condition body]."""
+    clauses = ctx.stack.pop()
+    clause_list = _get_aggregate(clauses, "cond")
+
+    if not clause_list:
+        return  # Empty cond does nothing
+
+    # Save stack for condition testing
+    saved = ctx.stack._items.copy()
+
+    for clause in clause_list:
+        if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+            raise JoyTypeError("cond", "QUOTATION clause", type(clause).__name__)
+
+        clause_terms = clause.value.terms
+        if len(clause_terms) < 1:
+            continue
+
+        # Last clause might be default (single element)
+        if len(clause_terms) == 1:
+            # Default clause - just execute it
+            ctx.stack._items = saved.copy()
+            if isinstance(clause_terms[0], JoyQuotation):
+                ctx.evaluator.execute(clause_terms[0])
+            elif isinstance(clause_terms[0], JoyValue) and clause_terms[0].type == JoyType.QUOTATION:
+                ctx.evaluator.execute(clause_terms[0].value)
+            return
+
+        # Regular clause: [condition body]
+        # condition is first element, body is second
+        condition = clause_terms[0]
+        body = clause_terms[1] if len(clause_terms) > 1 else None
+
+        # Test condition
+        ctx.stack._items = saved.copy()
+        if isinstance(condition, JoyQuotation):
+            ctx.evaluator.execute(condition)
+        elif isinstance(condition, JoyValue) and condition.type == JoyType.QUOTATION:
+            ctx.evaluator.execute(condition.value)
+        elif isinstance(condition, str):
+            ctx.evaluator._execute_symbol(condition)
+        else:
+            ctx.stack.push_value(condition)
+
+        test_result = ctx.stack.pop()
+
+        if test_result.is_truthy():
+            # Execute body
+            ctx.stack._items = saved.copy()
+            if body is not None:
+                if isinstance(body, JoyQuotation):
+                    ctx.evaluator.execute(body)
+                elif isinstance(body, JoyValue) and body.type == JoyType.QUOTATION:
+                    ctx.evaluator.execute(body.value)
+                elif isinstance(body, str):
+                    ctx.evaluator._execute_symbol(body)
+            return
+
+    # No clause matched, restore stack
+    ctx.stack._items = saved
+
+
+# ----------------------------------------------------------------------------
+# Iteration Combinators
+# ----------------------------------------------------------------------------
+
+
+@joy_word(name="step", params=2, doc="A [P] -> ...")
+def step(ctx: ExecutionContext) -> None:
+    """Execute P for each element of A, pushing element before each call."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "step")
+    items = _get_aggregate(agg, "step")
+
+    for item in items:
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+
+
+@joy_word(name="map", params=2, doc="A [P] -> A'")
+def map_combinator(ctx: ExecutionContext) -> None:
+    """Apply P to each element of A, collecting results."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "map")
+    items = _get_aggregate(agg, "map")
+
+    results = []
+    for item in items:
+        # Save stack
+        saved = ctx.stack._items.copy()
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+        result = ctx.stack.pop()
+        results.append(result)
+        # Restore stack
+        ctx.stack._items = saved
+
+    ctx.stack.push_value(_make_aggregate(tuple(results), agg.type))
+
+
+@joy_word(name="filter", params=2, doc="A [P] -> A'")
+def filter_combinator(ctx: ExecutionContext) -> None:
+    """Keep elements of A for which P returns true."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "filter")
+    items = _get_aggregate(agg, "filter")
+
+    results = []
+    for item in items:
+        # Save stack
+        saved = ctx.stack._items.copy()
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+        test_result = ctx.stack.pop()
+        # Restore stack
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            results.append(item)
+
+    ctx.stack.push_value(_make_aggregate(tuple(results), agg.type))
+
+
+@joy_word(name="fold", params=3, doc="A V [P] -> V'")
+def fold(ctx: ExecutionContext) -> None:
+    """Fold A with initial value V using binary operation P."""
+    quot, init, agg = ctx.stack.pop_n(3)
+    q = _expect_quotation(quot, "fold")
+    items = _get_aggregate(agg, "fold")
+
+    acc = init
+    for item in items:
+        ctx.stack.push_value(acc)
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+        acc = ctx.stack.pop()
+
+    ctx.stack.push_value(acc)
+
+
+@joy_word(name="each", params=2, doc="A [P] -> ...")
+def each(ctx: ExecutionContext) -> None:
+    """Execute P for each element of A (alias for step)."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "each")
+    items = _get_aggregate(agg, "each")
+
+    for item in items:
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+
+
+@joy_word(name="any", params=2, doc="A [P] -> B")
+def any_combinator(ctx: ExecutionContext) -> None:
+    """Test if P is true for any element of A."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "any")
+    items = _get_aggregate(agg, "any")
+
+    for item in items:
+        saved = ctx.stack._items.copy()
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+        test_result = ctx.stack.pop()
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            ctx.stack.push_value(JoyValue.boolean(True))
+            return
+
+    ctx.stack.push_value(JoyValue.boolean(False))
+
+
+@joy_word(name="all", params=2, doc="A [P] -> B")
+def all_combinator(ctx: ExecutionContext) -> None:
+    """Test if P is true for all elements of A."""
+    quot, agg = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "all")
+    items = _get_aggregate(agg, "all")
+
+    for item in items:
+        saved = ctx.stack._items.copy()
+        ctx.stack.push_value(item)
+        ctx.evaluator.execute(q)
+        test_result = ctx.stack.pop()
+        ctx.stack._items = saved
+
+        if not test_result.is_truthy():
+            ctx.stack.push_value(JoyValue.boolean(False))
+            return
+
+    ctx.stack.push_value(JoyValue.boolean(True))
+
+
+# ----------------------------------------------------------------------------
+# Looping Combinators
+# ----------------------------------------------------------------------------
+
+
+@joy_word(name="times", params=2, doc="N [P] -> ...")
+def times(ctx: ExecutionContext) -> None:
+    """Execute P exactly N times."""
+    quot, n = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "times")
+    if n.type != JoyType.INTEGER:
+        raise JoyTypeError("times", "INTEGER", n.type.name)
+
+    count = n.value
+    for _ in range(count):
+        ctx.evaluator.execute(q)
+
+
+@joy_word(name="while", params=2, doc="[B] [P] -> ...")
+def while_loop(ctx: ExecutionContext) -> None:
+    """While B is true, execute P."""
+    p_quot, b_quot = ctx.stack.pop_n(2)
+    b = _expect_quotation(b_quot, "while")
+    p = _expect_quotation(p_quot, "while")
+
+    while True:
+        # Save stack for condition test
+        saved = ctx.stack._items.copy()
+        ctx.evaluator.execute(b)
+        test_result = ctx.stack.pop()
+        ctx.stack._items = saved
+
+        if not test_result.is_truthy():
+            break
+
+        ctx.evaluator.execute(p)
+
+
+@joy_word(name="loop", params=1, doc="[P] -> ...")
+def loop(ctx: ExecutionContext) -> None:
+    """Execute P repeatedly until it leaves false on stack."""
+    quot = ctx.stack.pop()
+    q = _expect_quotation(quot, "loop")
+
+    while True:
+        ctx.evaluator.execute(q)
+        test_result = ctx.stack.pop()
+        if not test_result.is_truthy():
+            break
+
+
+# ----------------------------------------------------------------------------
+# Additional Combinators (bi, tri, cleave)
+# ----------------------------------------------------------------------------
+
+
+@joy_word(name="bi", params=3, doc="X [P] [Q] -> ...")
+def bi(ctx: ExecutionContext) -> None:
+    """Apply P to X, then apply Q to X."""
+    q_quot, p_quot, x = ctx.stack.pop_n(3)
+    p = _expect_quotation(p_quot, "bi")
+    q = _expect_quotation(q_quot, "bi")
+
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(p)
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+
+
+@joy_word(name="tri", params=4, doc="X [P] [Q] [R] -> ...")
+def tri(ctx: ExecutionContext) -> None:
+    """Apply P, Q, R to X in sequence."""
+    r_quot, q_quot, p_quot, x = ctx.stack.pop_n(4)
+    p = _expect_quotation(p_quot, "tri")
+    q = _expect_quotation(q_quot, "tri")
+    r = _expect_quotation(r_quot, "tri")
+
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(p)
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(r)
+
+
+@joy_word(name="cleave", params=2, doc="X [P1 P2 ...] -> ...")
+def cleave(ctx: ExecutionContext) -> None:
+    """Apply each quotation in list to X."""
+    quots, x = ctx.stack.pop_n(2)
+    quot_list = _get_aggregate(quots, "cleave")
+
+    for q_val in quot_list:
+        if isinstance(q_val, JoyValue) and q_val.type == JoyType.QUOTATION:
+            ctx.stack.push_value(x)
+            ctx.evaluator.execute(q_val.value)
+        elif isinstance(q_val, JoyQuotation):
+            ctx.stack.push_value(x)
+            ctx.evaluator.execute(q_val)
+
+
+@joy_word(name="spread", params=2, doc="X Y ... [P1 P2 ...] -> ...")
+def spread(ctx: ExecutionContext) -> None:
+    """Apply P1 to X, P2 to Y, etc."""
+    quots = ctx.stack.pop()
+    quot_list = _get_aggregate(quots, "spread")
+
+    if not quot_list:
+        return
+
+    # Pop values for each quotation
+    values = list(ctx.stack.pop_n(len(quot_list)))
+    values.reverse()  # So first value pairs with first quotation
+
+    for val, q_val in zip(values, quot_list):
+        if isinstance(q_val, JoyValue) and q_val.type == JoyType.QUOTATION:
+            ctx.stack.push_value(val)
+            ctx.evaluator.execute(q_val.value)
+        elif isinstance(q_val, JoyQuotation):
+            ctx.stack.push_value(val)
+            ctx.evaluator.execute(q_val)
+
+
+@joy_word(name="infra", params=2, doc="L [P] -> L'")
+def infra(ctx: ExecutionContext) -> None:
+    """Execute P with L as the stack, return new stack as list."""
+    quot, lst = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "infra")
+    items = _get_aggregate(lst, "infra")
+
+    # Save current stack
+    saved = ctx.stack._items.copy()
+
+    # Replace stack with list contents
+    ctx.stack._items = list(items)
+
+    # Execute quotation
+    ctx.evaluator.execute(q)
+
+    # Collect result as list
+    result = tuple(ctx.stack._items)
+
+    # Restore original stack and push result
+    ctx.stack._items = saved
+    ctx.stack.push_value(JoyValue.list(result))
+
+
+@joy_word(name="app1", params=2, doc="X [P] -> X'")
+def app1(ctx: ExecutionContext) -> None:
+    """Apply P to X, leaving result (like unary but different semantics)."""
+    quot, x = ctx.stack.pop_n(2)
+    q = _expect_quotation(quot, "app1")
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+
+
+@joy_word(name="app2", params=3, doc="X Y [P] -> X' Y'")
+def app2(ctx: ExecutionContext) -> None:
+    """Apply P to X and Y separately, leaving both results."""
+    quot, y, x = ctx.stack.pop_n(3)
+    q = _expect_quotation(quot, "app2")
+
+    # Apply to X
+    saved = ctx.stack._items.copy()
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(q)
+    x_result = ctx.stack.pop()
+    ctx.stack._items = saved
+
+    # Apply to Y
+    saved = ctx.stack._items.copy()
+    ctx.stack.push_value(y)
+    ctx.evaluator.execute(q)
+    y_result = ctx.stack.pop()
+    ctx.stack._items = saved
+
+    ctx.stack.push_value(x_result)
+    ctx.stack.push_value(y_result)
+
+
+@joy_word(name="app3", params=4, doc="X Y Z [P] -> X' Y' Z'")
+def app3(ctx: ExecutionContext) -> None:
+    """Apply P to X, Y, Z separately, leaving all results."""
+    quot, z, y, x = ctx.stack.pop_n(4)
+    q = _expect_quotation(quot, "app3")
+
+    results = []
+    for val in [x, y, z]:
+        saved = ctx.stack._items.copy()
+        ctx.stack.push_value(val)
+        ctx.evaluator.execute(q)
+        results.append(ctx.stack.pop())
+        ctx.stack._items = saved
+
+    for r in results:
+        ctx.stack.push_value(r)
+
+
+@joy_word(name="compose", params=2, doc="[P] [Q] -> [[P] [Q] concat]")
+def compose(ctx: ExecutionContext) -> None:
+    """Compose two quotations into one."""
+    q2, q1 = ctx.stack.pop_n(2)
+    p1 = _expect_quotation(q1, "compose")
+    p2 = _expect_quotation(q2, "compose")
+
+    # Create combined quotation
+    combined = JoyQuotation(p1.terms + p2.terms)
+    ctx.stack.push_value(JoyValue.quotation(combined))
+
+
+# =============================================================================
+# Phase 4: Recursion Combinators
+# =============================================================================
+
+
+@joy_word(name="primrec", params=3, doc="X [I] [C] -> R")
+def primrec(ctx: ExecutionContext) -> None:
+    """
+    Primitive recursion.
+
+    Executes I to obtain an initial value R0.
+    For integer X: uses increasing positive integers to X, combines by C for new R.
+    For aggregate X: uses successive members and combines by C for new R.
+    """
+    c_quot, i_quot, x = ctx.stack.pop_n(3)
+    i = _expect_quotation(i_quot, "primrec")
+    c = _expect_quotation(c_quot, "primrec")
+
+    # Execute I to get initial value
+    ctx.evaluator.execute(i)
+    # Result is now on stack
+
+    if x.type == JoyType.INTEGER:
+        # For integer: combine with 1, 2, ..., X
+        n = x.value
+        for j in range(1, n + 1):
+            ctx.stack.push(j)
+            ctx.evaluator.execute(c)
+    elif x.type in (JoyType.LIST, JoyType.QUOTATION):
+        # For aggregate: combine with each member
+        items = x.value if x.type == JoyType.LIST else x.value.terms
+        for item in items:
+            if isinstance(item, JoyValue):
+                ctx.stack.push_value(item)
+            else:
+                ctx.stack.push(item)
+            ctx.evaluator.execute(c)
+    elif x.type == JoyType.STRING:
+        # For string: combine with each character
+        for ch in x.value:
+            ctx.stack.push(ch)
+            ctx.evaluator.execute(c)
+    elif x.type == JoyType.SET:
+        # For set: combine with each member
+        for member in sorted(x.value):
+            ctx.stack.push(member)
+            ctx.evaluator.execute(c)
+    else:
+        raise JoyTypeError(f"primrec: expected integer or aggregate, got {x.type}")
+
+
+@joy_word(name="linrec", params=4, doc="[P] [T] [R1] [R2] -> ...")
+def linrec(ctx: ExecutionContext) -> None:
+    """
+    Linear recursion combinator.
+
+    [P] = predicate (if-base-case)
+    [T] = terminal (base case)
+    [R1] = reduce (before recursion)
+    [R2] = combine (after recursion)
+
+    Executes P. If that yields true, executes T.
+    Else executes R1, recurses, executes R2.
+    """
+    r2_quot, r1_quot, t_quot, p_quot = ctx.stack.pop_n(4)
+    p = _expect_quotation(p_quot, "linrec")
+    t = _expect_quotation(t_quot, "linrec")
+    r1 = _expect_quotation(r1_quot, "linrec")
+    r2 = _expect_quotation(r2_quot, "linrec")
+
+    def linrec_aux() -> None:
+        # Save stack state for predicate test
+        saved = ctx.stack._items.copy()
+
+        # Execute predicate
+        ctx.evaluator.execute(p)
+        test_result = ctx.stack.pop()
+
+        # Restore stack
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            # Base case: execute terminal
+            ctx.evaluator.execute(t)
+        else:
+            # Recursive case: execute R1, recurse, execute R2
+            ctx.evaluator.execute(r1)
+            linrec_aux()
+            ctx.evaluator.execute(r2)
+
+    linrec_aux()
+
+
+@joy_word(name="binrec", params=4, doc="[P] [T] [R1] [R2] -> ...")
+def binrec(ctx: ExecutionContext) -> None:
+    """
+    Binary recursion combinator (divide and conquer).
+
+    [P] = predicate (if-base-case)
+    [T] = terminal (base case)
+    [R1] = split (produces two values)
+    [R2] = combine (combines two results)
+
+    Executes P. If that yields true, executes T.
+    Else uses R1 to produce two intermediates, recurses on both,
+    then executes R2 to combine their results.
+    """
+    r2_quot, r1_quot, t_quot, p_quot = ctx.stack.pop_n(4)
+    p = _expect_quotation(p_quot, "binrec")
+    t = _expect_quotation(t_quot, "binrec")
+    r1 = _expect_quotation(r1_quot, "binrec")
+    r2 = _expect_quotation(r2_quot, "binrec")
+
+    def binrec_aux() -> None:
+        # Save stack state for predicate test
+        saved = ctx.stack._items.copy()
+
+        # Execute predicate
+        ctx.evaluator.execute(p)
+        test_result = ctx.stack.pop()
+
+        # Restore stack
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            # Base case: execute terminal
+            ctx.evaluator.execute(t)
+        else:
+            # Split into two
+            ctx.evaluator.execute(r1)
+
+            # Save first result (top of stack)
+            first_arg = ctx.stack.pop()
+
+            # Recurse on remaining (what's still on stack)
+            binrec_aux()
+            first_result = ctx.stack.pop()
+
+            # Restore first arg and recurse on it
+            ctx.stack.push_value(first_arg)
+            binrec_aux()
+
+            # Push first result back
+            ctx.stack.push_value(first_result)
+
+            # Combine
+            ctx.evaluator.execute(r2)
+
+    binrec_aux()
+
+
+@joy_word(name="tailrec", params=3, doc="[P] [T] [R1] -> ...")
+def tailrec(ctx: ExecutionContext) -> None:
+    """
+    Tail recursion combinator.
+
+    [P] = predicate (if-base-case)
+    [T] = terminal (base case)
+    [R1] = recurse (prepare for next iteration)
+
+    Executes P. If that yields true, executes T.
+    Else executes R1, recurses.
+    """
+    r1_quot, t_quot, p_quot = ctx.stack.pop_n(3)
+    p = _expect_quotation(p_quot, "tailrec")
+    t = _expect_quotation(t_quot, "tailrec")
+    r1 = _expect_quotation(r1_quot, "tailrec")
+
+    # Use iteration instead of actual recursion for tail-call optimization
+    while True:
+        # Save stack state for predicate test
+        saved = ctx.stack._items.copy()
+
+        # Execute predicate
+        ctx.evaluator.execute(p)
+        test_result = ctx.stack.pop()
+
+        # Restore stack
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            # Base case: execute terminal and exit
+            ctx.evaluator.execute(t)
+            break
+        else:
+            # Execute R1 and continue loop
+            ctx.evaluator.execute(r1)
+
+
+@joy_word(name="genrec", params=4, doc="[B] [T] [R1] [R2] -> ...")
+def genrec(ctx: ExecutionContext) -> None:
+    """
+    General recursion combinator.
+
+    [B] = predicate (if-base-case)
+    [T] = terminal (base case)
+    [R1] = pre-recursion
+    [R2] = post-recursion
+
+    Executes B. If that yields true, executes T.
+    Else executes R1 and then [[B] [T] [R1] R2] genrec] R2.
+
+    This is the most general recursion combinator. The key insight is that
+    R2 has access to a quotation that contains the recursive call.
+    """
+    r2_quot, r1_quot, t_quot, b_quot = ctx.stack.pop_n(4)
+    b = _expect_quotation(b_quot, "genrec")
+    t = _expect_quotation(t_quot, "genrec")
+    r1 = _expect_quotation(r1_quot, "genrec")
+    r2 = _expect_quotation(r2_quot, "genrec")
+
+    def genrec_aux() -> None:
+        # Save stack state for predicate test
+        saved = ctx.stack._items.copy()
+
+        # Execute predicate B
+        ctx.evaluator.execute(b)
+        test_result = ctx.stack.pop()
+
+        # Restore stack
+        ctx.stack._items = saved
+
+        if test_result.is_truthy():
+            # Base case: execute terminal
+            ctx.evaluator.execute(t)
+        else:
+            # Execute R1
+            ctx.evaluator.execute(r1)
+
+            # Build the recursive quotation: [[B] [T] [R1] R2] genrec
+            # This quotation, when executed, will call genrec_aux
+            # We create a quotation that captures the continuation
+            rec_quot = JoyQuotation((
+                JoyValue.quotation(b),
+                JoyValue.quotation(t),
+                JoyValue.quotation(r1),
+                JoyValue.quotation(r2),
+                "genrec",
+            ))
+            ctx.stack.push_value(JoyValue.quotation(rec_quot))
+
+            # Execute R2 (which typically uses the recursive quotation)
+            ctx.evaluator.execute(r2)
+
+    genrec_aux()
