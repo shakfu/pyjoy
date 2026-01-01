@@ -80,14 +80,18 @@ uv run python -m pyjoy compile program.joy -o build -n myprogram --run
 
 ## Status
 
-- **C Backend Coverage:** 125/203 primitives (61%) + 8 extensions
+- **C Backend Coverage:** 145/203 primitives (71%) + 8 extensions
 - **Python Interpreter:** Full Joy language support
 - **Compilation:** Joy source to C executable via `pyjoy compile`
 - **Tests:** 411 pytest tests passing
 
 ### Recent Additions
 
-- Aggregate combinators: `split`, `enconcat`
+- Arity combinators: `nullary`, `unary`, `binary`, `ternary`, `cleave`
+- Type conditionals: `ifinteger`, `ifchar`, `iflogical`, `ifset`, `ifstring`, `iflist`, `iffloat`, `iffile`
+- Type predicates: `leaf`, `file`
+- Aggregate combinators: `split`, `enconcat`, `some`, `all`
+- Stack variants: `rollupd`, `rolldownd`, `rotated`
 - File I/O: `stdin`, `stdout`, `stderr` (JOY_FILE type support)
 - Math primitives: `acos`, `asin`, `atan`, `atan2`, `cosh`, `sinh`, `tanh`, `log10`, `frexp`, `ldexp`, `modf`
 - String conversion: `strtol`, `strtod`
