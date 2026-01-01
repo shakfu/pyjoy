@@ -2,7 +2,7 @@
 
 ## Primitives Coverage
 
-**Current: 172/203 (84%)** + 8 extensions
+**Current: 176/203 (86%)** + 8 extensions
 
 Run `uv run python scripts/check_c_coverage.py` for full report.
 
@@ -17,7 +17,7 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 
 ---
 
-## Remaining Primitives (31)
+## Remaining Primitives (27)
 
 ### Operand (5)
 
@@ -57,19 +57,7 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 |-----------|-----------|-------------|
 | `user` | `X -> B` | Test if X is user-defined |
 
-### Combinator (7)
-
-#### Arity Combinators
-| Primitive | Signature | Description |
-|-----------|-----------|-------------|
-| `unary2` | `X1 X2 [P] -> R1 R2` | Execute P on X1 and X2 separately |
-| `unary3` | `X1 X2 X3 [P] -> R1 R2 R3` | Execute P on three values |
-| `unary4` | `X1 X2 X3 X4 [P] -> R1 R2 R3 R4` | Execute P on four values |
-
-#### Control Flow
-| Primitive | Signature | Description |
-|-----------|-----------|-------------|
-| `construct` | `[P] [[P1] [P2] ..] -> R1 R2 ..` | Execute P, then each Pi |
+### Combinator (3)
 
 #### Tree Combinators
 | Primitive | Signature | Description |
@@ -122,6 +110,8 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 ### Medium
 - [x] ~~Type conditionals (`ifinteger`, `ifchar`, etc.)~~
 - [x] ~~Application combinators (`app1`, `app2`, etc.)~~
+- [x] ~~Arity combinators (`unary2`, `unary3`, `unary4`)~~
+- [x] ~~Control flow (`construct`)~~
 - [ ] Tree combinators
 - [ ] Time operations (`localtime`, `gmtime`, `strftime`)
 

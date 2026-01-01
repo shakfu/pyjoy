@@ -2064,6 +2064,123 @@ static void prim_ternary(JoyContext* ctx) {
     joy_value_free(&quot);
 }
 
+static void prim_unary2(JoyContext* ctx) {
+    /* X1 X2 [P] -> R1 R2 : execute P on X1 and X2 separately */
+    REQUIRE(3, "unary2");
+    JoyValue quot = POP();
+    JoyValue x2 = POP();
+    JoyValue x1 = POP();
+
+    /* Save current stack */
+    JoyStack* saved = joy_stack_copy(ctx->stack);
+
+    /* Execute P on X1 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x1);
+    execute_quot(ctx, &quot);
+    JoyValue r1 = POP();
+
+    /* Execute P on X2 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x2);
+    execute_quot(ctx, &quot);
+    JoyValue r2 = POP();
+
+    /* Restore original stack and push results */
+    joy_stack_free(ctx->stack);
+    ctx->stack = saved;
+    PUSH(r1);
+    PUSH(r2);
+
+    joy_value_free(&quot);
+}
+
+static void prim_unary3(JoyContext* ctx) {
+    /* X1 X2 X3 [P] -> R1 R2 R3 : execute P on three values */
+    REQUIRE(4, "unary3");
+    JoyValue quot = POP();
+    JoyValue x3 = POP();
+    JoyValue x2 = POP();
+    JoyValue x1 = POP();
+
+    /* Save current stack */
+    JoyStack* saved = joy_stack_copy(ctx->stack);
+
+    /* Execute P on X1 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x1);
+    execute_quot(ctx, &quot);
+    JoyValue r1 = POP();
+
+    /* Execute P on X2 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x2);
+    execute_quot(ctx, &quot);
+    JoyValue r2 = POP();
+
+    /* Execute P on X3 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x3);
+    execute_quot(ctx, &quot);
+    JoyValue r3 = POP();
+
+    /* Restore original stack and push results */
+    joy_stack_free(ctx->stack);
+    ctx->stack = saved;
+    PUSH(r1);
+    PUSH(r2);
+    PUSH(r3);
+
+    joy_value_free(&quot);
+}
+
+static void prim_unary4(JoyContext* ctx) {
+    /* X1 X2 X3 X4 [P] -> R1 R2 R3 R4 : execute P on four values */
+    REQUIRE(5, "unary4");
+    JoyValue quot = POP();
+    JoyValue x4 = POP();
+    JoyValue x3 = POP();
+    JoyValue x2 = POP();
+    JoyValue x1 = POP();
+
+    /* Save current stack */
+    JoyStack* saved = joy_stack_copy(ctx->stack);
+
+    /* Execute P on X1 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x1);
+    execute_quot(ctx, &quot);
+    JoyValue r1 = POP();
+
+    /* Execute P on X2 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x2);
+    execute_quot(ctx, &quot);
+    JoyValue r2 = POP();
+
+    /* Execute P on X3 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x3);
+    execute_quot(ctx, &quot);
+    JoyValue r3 = POP();
+
+    /* Execute P on X4 */
+    joy_stack_clear(ctx->stack);
+    PUSH(x4);
+    execute_quot(ctx, &quot);
+    JoyValue r4 = POP();
+
+    /* Restore original stack and push results */
+    joy_stack_free(ctx->stack);
+    ctx->stack = saved;
+    PUSH(r1);
+    PUSH(r2);
+    PUSH(r3);
+    PUSH(r4);
+
+    joy_value_free(&quot);
+}
+
 static void prim_cleave(JoyContext* ctx) {
     /* X [P1] [P2] -> R1 R2 : apply two quotations to X */
     REQUIRE(3, "cleave");
@@ -2288,6 +2405,61 @@ static void prim_app4(JoyContext* ctx) {
     PUSH(r4);
 
     joy_value_free(&quot);
+}
+
+static void prim_construct(JoyContext* ctx) {
+    /* [P] [[P1] [P2] ..] -> R1 R2 .. : execute P, then each Pi, collect results */
+    REQUIRE(2, "construct");
+    JoyValue quots = POP();  /* List of quotations */
+    JoyValue p = POP();      /* Initial quotation */
+
+    /* Execute P first */
+    execute_quot(ctx, &p);
+
+    /* Now execute each quotation in the list, saving stack before each */
+    if (quots.type != JOY_LIST && quots.type != JOY_QUOTATION) {
+        joy_value_free(&p);
+        joy_value_free(&quots);
+        joy_error_type("construct", "LIST or QUOTATION", quots.type);
+    }
+
+    size_t n = quots.type == JOY_LIST ? quots.data.list->length : quots.data.quotation->length;
+    JoyValue* items = quots.type == JOY_LIST ? quots.data.list->items : quots.data.quotation->terms;
+
+    /* Store results */
+    JoyValue* results = malloc(n * sizeof(JoyValue));
+
+    /* Save stack state after P execution */
+    JoyStack* saved = joy_stack_copy(ctx->stack);
+
+    for (size_t i = 0; i < n; i++) {
+        /* Restore stack to state after P */
+        joy_stack_clear(ctx->stack);
+        for (size_t j = 0; j < saved->depth; j++) {
+            PUSH(joy_value_copy(saved->items[j]));
+        }
+
+        /* Execute Pi */
+        JoyValue qi = items[i];
+        execute_quot(ctx, &qi);
+
+        /* Get result */
+        results[i] = POP();
+    }
+
+    /* Restore original stack (before construct) and push all results */
+    joy_stack_free(ctx->stack);
+    ctx->stack = saved;
+
+    /* Clear the saved stack contents and push results */
+    joy_stack_clear(ctx->stack);
+    for (size_t i = 0; i < n; i++) {
+        PUSH(results[i]);
+    }
+
+    free(results);
+    joy_value_free(&p);
+    joy_value_free(&quots);
 }
 
 /* ---------- Type Conditionals ---------- */
@@ -3727,9 +3899,13 @@ void joy_register_primitives(JoyContext* ctx) {
     /* Arity combinators */
     joy_dict_define_primitive(d, "nullary", prim_nullary);
     joy_dict_define_primitive(d, "unary", prim_unary);
+    joy_dict_define_primitive(d, "unary2", prim_unary2);
+    joy_dict_define_primitive(d, "unary3", prim_unary3);
+    joy_dict_define_primitive(d, "unary4", prim_unary4);
     joy_dict_define_primitive(d, "binary", prim_binary);
     joy_dict_define_primitive(d, "ternary", prim_ternary);
     joy_dict_define_primitive(d, "cleave", prim_cleave);
+    joy_dict_define_primitive(d, "construct", prim_construct);
 
     /* Application combinators */
     joy_dict_define_primitive(d, "app1", prim_app1);
