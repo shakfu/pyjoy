@@ -3244,6 +3244,149 @@ static void prim_srand(JoyContext* ctx) {
     joy_value_free(&v);
 }
 
+static void prim_localtime(JoyContext* ctx) {
+    /* I -> T : convert time_t to local time struct (list of 9 integers) */
+    REQUIRE(1, "localtime");
+    JoyValue v = POP();
+    EXPECT_TYPE(v, JOY_INTEGER, "localtime");
+    time_t t = (time_t)v.data.integer;
+    joy_value_free(&v);
+
+    struct tm* tm = localtime(&t);
+    if (!tm) {
+        /* Return empty list on error */
+        JoyValue empty = {.type = JOY_LIST, .data.list = joy_list_new(0)};
+        PUSH(empty);
+        return;
+    }
+
+    /* Create list: [sec min hour mday mon year wday yday isdst] */
+    JoyList* result = joy_list_new(9);
+    joy_list_push(result, joy_integer(tm->tm_sec));
+    joy_list_push(result, joy_integer(tm->tm_min));
+    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_mday));
+    joy_list_push(result, joy_integer(tm->tm_mon));
+    joy_list_push(result, joy_integer(tm->tm_year));
+    joy_list_push(result, joy_integer(tm->tm_wday));
+    joy_list_push(result, joy_integer(tm->tm_yday));
+    joy_list_push(result, joy_integer(tm->tm_isdst));
+
+    JoyValue rv = {.type = JOY_LIST, .data.list = result};
+    PUSH(rv);
+}
+
+static void prim_gmtime(JoyContext* ctx) {
+    /* I -> T : convert time_t to UTC time struct (list of 9 integers) */
+    REQUIRE(1, "gmtime");
+    JoyValue v = POP();
+    EXPECT_TYPE(v, JOY_INTEGER, "gmtime");
+    time_t t = (time_t)v.data.integer;
+    joy_value_free(&v);
+
+    struct tm* tm = gmtime(&t);
+    if (!tm) {
+        /* Return empty list on error */
+        JoyValue empty = {.type = JOY_LIST, .data.list = joy_list_new(0)};
+        PUSH(empty);
+        return;
+    }
+
+    /* Create list: [sec min hour mday mon year wday yday isdst] */
+    JoyList* result = joy_list_new(9);
+    joy_list_push(result, joy_integer(tm->tm_sec));
+    joy_list_push(result, joy_integer(tm->tm_min));
+    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_mday));
+    joy_list_push(result, joy_integer(tm->tm_mon));
+    joy_list_push(result, joy_integer(tm->tm_year));
+    joy_list_push(result, joy_integer(tm->tm_wday));
+    joy_list_push(result, joy_integer(tm->tm_yday));
+    joy_list_push(result, joy_integer(tm->tm_isdst));
+
+    JoyValue rv = {.type = JOY_LIST, .data.list = result};
+    PUSH(rv);
+}
+
+static void prim_mktime(JoyContext* ctx) {
+    /* T -> I : convert time struct (list of 9 integers) to time_t */
+    REQUIRE(1, "mktime");
+    JoyValue v = POP();
+    if (v.type != JOY_LIST) {
+        joy_value_free(&v);
+        joy_error_type("mktime", "LIST", v.type);
+    }
+
+    if (v.data.list->length < 9) {
+        joy_value_free(&v);
+        fprintf(stderr, "Error: mktime requires list of 9 integers\n");
+        exit(1);
+    }
+
+    struct tm tm = {0};
+    tm.tm_sec = (int)v.data.list->items[0].data.integer;
+    tm.tm_min = (int)v.data.list->items[1].data.integer;
+    tm.tm_hour = (int)v.data.list->items[2].data.integer;
+    tm.tm_mday = (int)v.data.list->items[3].data.integer;
+    tm.tm_mon = (int)v.data.list->items[4].data.integer;
+    tm.tm_year = (int)v.data.list->items[5].data.integer;
+    tm.tm_wday = (int)v.data.list->items[6].data.integer;
+    tm.tm_yday = (int)v.data.list->items[7].data.integer;
+    tm.tm_isdst = (int)v.data.list->items[8].data.integer;
+
+    joy_value_free(&v);
+
+    time_t result = mktime(&tm);
+    PUSH(joy_integer((int64_t)result));
+}
+
+static void prim_strftime(JoyContext* ctx) {
+    /* T S1 -> S2 : format time struct with format string */
+    REQUIRE(2, "strftime");
+    JoyValue fmt = POP();
+    JoyValue t = POP();
+
+    if (fmt.type != JOY_STRING) {
+        joy_value_free(&t);
+        joy_value_free(&fmt);
+        joy_error_type("strftime", "STRING", fmt.type);
+    }
+    if (t.type != JOY_LIST) {
+        joy_value_free(&t);
+        joy_value_free(&fmt);
+        joy_error_type("strftime", "LIST", t.type);
+    }
+    if (t.data.list->length < 9) {
+        joy_value_free(&t);
+        joy_value_free(&fmt);
+        fprintf(stderr, "Error: strftime requires time struct with 9 elements\n");
+        exit(1);
+    }
+
+    struct tm tm = {0};
+    tm.tm_sec = (int)t.data.list->items[0].data.integer;
+    tm.tm_min = (int)t.data.list->items[1].data.integer;
+    tm.tm_hour = (int)t.data.list->items[2].data.integer;
+    tm.tm_mday = (int)t.data.list->items[3].data.integer;
+    tm.tm_mon = (int)t.data.list->items[4].data.integer;
+    tm.tm_year = (int)t.data.list->items[5].data.integer;
+    tm.tm_wday = (int)t.data.list->items[6].data.integer;
+    tm.tm_yday = (int)t.data.list->items[7].data.integer;
+    tm.tm_isdst = (int)t.data.list->items[8].data.integer;
+
+    char buffer[256];
+    size_t len = strftime(buffer, sizeof(buffer), fmt.data.string, &tm);
+
+    joy_value_free(&t);
+    joy_value_free(&fmt);
+
+    if (len == 0) {
+        PUSH(joy_string(""));
+    } else {
+        PUSH(joy_string(buffer));
+    }
+}
+
 static void prim_frexp(JoyContext* ctx) {
     /* F -> G I : split float into mantissa G and exponent I */
     REQUIRE(1, "frexp");
@@ -3882,6 +4025,10 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "clock", prim_clock);
     joy_dict_define_primitive(d, "rand", prim_rand);
     joy_dict_define_primitive(d, "srand", prim_srand);
+    joy_dict_define_primitive(d, "localtime", prim_localtime);
+    joy_dict_define_primitive(d, "gmtime", prim_gmtime);
+    joy_dict_define_primitive(d, "mktime", prim_mktime);
+    joy_dict_define_primitive(d, "strftime", prim_strftime);
 
     /* Additional math */
     joy_dict_define_primitive(d, "div", prim_div);

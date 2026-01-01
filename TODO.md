@@ -2,7 +2,7 @@
 
 ## Primitives Coverage
 
-**Current: 176/203 (86%)** + 8 extensions
+**Current: 180/203 (88%)** + 8 extensions
 
 Run `uv run python scripts/check_c_coverage.py` for full report.
 
@@ -17,7 +17,7 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 
 ---
 
-## Remaining Primitives (27)
+## Remaining Primitives (23)
 
 ### Operand (5)
 
@@ -29,15 +29,7 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 | `undefs` | `->` | Push list of undefined symbols |
 | `echo` | `-> I` | Push echo flag value (0..3) |
 
-### Operator (8)
-
-#### Time Operations
-| Primitive | Signature | Description |
-|-----------|-----------|-------------|
-| `localtime` | `I -> T` | Convert time_t to local time struct |
-| `gmtime` | `I -> T` | Convert time_t to UTC time struct |
-| `mktime` | `T -> I` | Convert time struct to time_t |
-| `strftime` | `T S1 -> S2` | Format time as string |
+### Operator (4)
 
 #### Formatting
 | Primitive | Signature | Description |
@@ -112,8 +104,8 @@ Run `uv run python scripts/check_c_coverage.py` for full report.
 - [x] ~~Application combinators (`app1`, `app2`, etc.)~~
 - [x] ~~Arity combinators (`unary2`, `unary3`, `unary4`)~~
 - [x] ~~Control flow (`construct`)~~
+- [x] ~~Time operations (`localtime`, `gmtime`, `mktime`, `strftime`)~~
 - [ ] Tree combinators
-- [ ] Time operations (`localtime`, `gmtime`, `strftime`)
 
 ### Low (interpreter-specific)
 - [ ] `help`, `helpdetail`, `manual`
