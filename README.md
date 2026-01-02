@@ -110,8 +110,8 @@ uv run pyjoy test tests/joy --compile
 
 | Backend | Passing | Total | Coverage |
 |---------|---------|-------|----------|
-| Python Interpreter | 154 | 215 | 71.6% |
-| C Backend | 190 | 215 | 88.4% |
+| Python Interpreter | 170 | 215 | 79.1% |
+| C Backend | 199 | 215 | 92.6% |
 | pytest (unit tests) | 420 | 420 | 100% |
 
 ### Primitives

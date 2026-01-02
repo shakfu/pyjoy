@@ -140,8 +140,12 @@ class Evaluator:
             term: Can be JoyValue, JoyQuotation, or string (symbol)
         """
         if isinstance(term, JoyValue):
-            # Literal value: push to stack
-            self.ctx.stack.push_value(term)
+            # Symbol values should be executed, not pushed
+            if term.type == JoyType.SYMBOL:
+                self._execute_symbol(term.value)
+            else:
+                # Other literal values: push to stack
+                self.ctx.stack.push_value(term)
 
         elif isinstance(term, JoyQuotation):
             # Quotation: wrap and push (don't execute)

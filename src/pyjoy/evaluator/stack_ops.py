@@ -53,7 +53,11 @@ def stack_word(ctx: ExecutionContext) -> None:
 
 @joy_word(name="unstack", params=1, doc="[X Y ..] -> X Y ..")
 def unstack(ctx: ExecutionContext) -> None:
-    """Replace stack with contents of list/quotation on top."""
+    """Replace stack with contents of list/quotation on top.
+
+    The list is in TOS-first order (same as stack output), so we push
+    in reverse order to reconstruct the original stack.
+    """
     lst = ctx.stack.pop()
     if lst.type == JoyType.LIST:
         items = lst.value
@@ -63,7 +67,8 @@ def unstack(ctx: ExecutionContext) -> None:
     else:
         raise JoyTypeError("unstack", "LIST or QUOTATION", lst.type.name)
     ctx.stack.clear()
-    for item in items:
+    # Push in reverse order so first element becomes TOS
+    for item in reversed(items):
         if isinstance(item, JoyValue):
             ctx.stack.push_value(item)
         else:
@@ -78,21 +83,21 @@ def over(ctx: ExecutionContext) -> None:
     ctx.stack.push_value(second)
 
 
-@joy_word(name="rotate", params=3, doc="X Y Z -> Y Z X")
+@joy_word(name="rotate", params=3, doc="X Y Z -> Z Y X")
 def rotate(ctx: ExecutionContext) -> None:
-    """Rotate top three items: X Y Z -> Y Z X."""
+    """Rotate top three items: X Y Z -> Z Y X (flip first and third)."""
     z, y, x = ctx.stack.pop_n(3)
-    ctx.stack.push_value(y)
     ctx.stack.push_value(z)
+    ctx.stack.push_value(y)
     ctx.stack.push_value(x)
 
 
-@joy_word(name="rotated", params=4, doc="X Y Z W -> Y Z X W")
+@joy_word(name="rotated", params=4, doc="X Y Z W -> Z Y X W")
 def rotated(ctx: ExecutionContext) -> None:
-    """Rotate under top: X Y Z W -> Y Z X W."""
+    """Rotate under top: X Y Z W -> Z Y X W."""
     w, z, y, x = ctx.stack.pop_n(4)
-    ctx.stack.push_value(y)
     ctx.stack.push_value(z)
+    ctx.stack.push_value(y)
     ctx.stack.push_value(x)
     ctx.stack.push_value(w)
 
@@ -115,23 +120,23 @@ def rolldown(ctx: ExecutionContext) -> None:
     ctx.stack.push_value(x)
 
 
-@joy_word(name="rollupd", params=4, doc="X Y Z W -> Y Z X W")
+@joy_word(name="rollupd", params=4, doc="X Y Z W -> Z X Y W")
 def rollupd(ctx: ExecutionContext) -> None:
-    """Rollup under top element."""
+    """Rollup under top element: X Y Z W -> Z X Y W."""
     w, z, y, x = ctx.stack.pop_n(4)
-    ctx.stack.push_value(y)
     ctx.stack.push_value(z)
     ctx.stack.push_value(x)
+    ctx.stack.push_value(y)
     ctx.stack.push_value(w)
 
 
-@joy_word(name="rolldownd", params=4, doc="X Y Z W -> Z X Y W")
+@joy_word(name="rolldownd", params=4, doc="X Y Z W -> Y Z X W")
 def rolldownd(ctx: ExecutionContext) -> None:
-    """Rolldown under top element."""
+    """Rolldown under top element: X Y Z W -> Y Z X W."""
     w, z, y, x = ctx.stack.pop_n(4)
+    ctx.stack.push_value(y)
     ctx.stack.push_value(z)
     ctx.stack.push_value(x)
-    ctx.stack.push_value(y)
     ctx.stack.push_value(w)
 
 

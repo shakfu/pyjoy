@@ -14,7 +14,7 @@ from pyjoy.errors import JoyTypeError
 from pyjoy.stack import ExecutionContext
 from pyjoy.types import JoyType, JoyValue
 
-from .core import expect_quotation, joy_word
+from .core import expect_quotation, get_primitive, joy_word
 
 # -----------------------------------------------------------------------------
 # Type Predicates
@@ -51,9 +51,11 @@ def is_string(ctx: ExecutionContext) -> None:
 
 @joy_word(name="list", params=1, doc="X -> B")
 def is_list(ctx: ExecutionContext) -> None:
-    """Test if X is a list."""
+    """Test if X is a list (or quotation, treated as list in Joy)."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.LIST))
+    ctx.stack.push_value(
+        JoyValue.boolean(x.type in (JoyType.LIST, JoyType.QUOTATION))
+    )
 
 
 @joy_word(name="logical", params=1, doc="X -> B")
@@ -105,23 +107,38 @@ def sametype(ctx: ExecutionContext) -> None:
 
 @joy_word(name="typeof", params=1, doc="X -> I")
 def typeof_(ctx: ExecutionContext) -> None:
-    """Return type of X as integer."""
+    """Return type of X as integer.
+
+    Joy42 type codes:
+    0 = UNKNOWN, 1 = (reserved), 2 = USRDEF, 3 = BUILTIN,
+    4 = BOOLEAN, 5 = CHAR, 6 = INTEGER, 7 = SET,
+    8 = STRING, 9 = LIST, 10 = FLOAT, 11 = FILE
+    """
     x = ctx.stack.pop()
-    # Joy type codes: 0=list, 1=bool, 2=char, 3=int, 4=set,
-    # 5=string, 6=symbol, 7=float, 8=file
+
+    # For symbols, check if it's a builtin or user-defined
+    if x.type == JoyType.SYMBOL:
+        # Check if it's registered as a primitive
+        is_primitive = get_primitive(x.value) is not None
+        is_user_def = x.value in ctx.evaluator.definitions
+        if is_primitive and not is_user_def:
+            ctx.stack.push_value(JoyValue.integer(3))  # BUILTIN
+        else:
+            ctx.stack.push_value(JoyValue.integer(2))  # USRDEF
+        return
+
     type_codes = {
-        JoyType.LIST: 0,
-        JoyType.BOOLEAN: 1,
-        JoyType.CHAR: 2,
-        JoyType.INTEGER: 3,
-        JoyType.SET: 4,
-        JoyType.STRING: 5,
-        JoyType.SYMBOL: 6,
-        JoyType.FLOAT: 7,
-        JoyType.FILE: 8,
-        JoyType.QUOTATION: 0,  # Quotation treated as list
+        JoyType.BOOLEAN: 4,
+        JoyType.CHAR: 5,
+        JoyType.INTEGER: 6,
+        JoyType.SET: 7,
+        JoyType.STRING: 8,
+        JoyType.LIST: 9,
+        JoyType.QUOTATION: 9,  # Quotation treated as list
+        JoyType.FLOAT: 10,
+        JoyType.FILE: 11,
     }
-    ctx.stack.push_value(JoyValue.integer(type_codes.get(x.type, -1)))
+    ctx.stack.push_value(JoyValue.integer(type_codes.get(x.type, 0)))
 
 
 @joy_word(name="casting", params=2, doc="X T -> Y")

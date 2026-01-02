@@ -116,18 +116,18 @@ class TestPhase7Primitives:
         assert evaluator.stack.peek().value == 42
 
     def test_rollupd(self, evaluator):
-        """rollupd rolls up under top element."""
+        """rollupd rolls up under top element: X Y Z W -> Z X Y W."""
         evaluator.run("1 2 3 4 rollupd")
-        # [1 2 3 4] -> [2 3 1 4]
-        result = [evaluator.stack.pop().value for _ in range(4)]
-        assert result == [4, 1, 3, 2]
-
-    def test_rolldownd(self, evaluator):
-        """rolldownd rolls down under top element."""
-        evaluator.run("1 2 3 4 rolldownd")
         # [1 2 3 4] -> [3 1 2 4]
         result = [evaluator.stack.pop().value for _ in range(4)]
         assert result == [4, 2, 1, 3]
+
+    def test_rolldownd(self, evaluator):
+        """rolldownd rolls down under top element: X Y Z W -> Y Z X W."""
+        evaluator.run("1 2 3 4 rolldownd")
+        # [1 2 3 4] -> [2 3 1 4]
+        result = [evaluator.stack.pop().value for _ in range(4)]
+        assert result == [4, 1, 3, 2]
 
 
 class TestHideInEnd:

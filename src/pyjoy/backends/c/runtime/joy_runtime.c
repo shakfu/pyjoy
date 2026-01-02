@@ -199,42 +199,96 @@ void joy_value_free(JoyValue* value) {
     }
 }
 
-bool joy_value_equal(JoyValue a, JoyValue b) {
-    if (a.type != b.type) return false;
-    switch (a.type) {
+/* Get numeric value for Joy comparison. Returns true if value has numeric interpretation.
+ * Joy treats many types as having numeric interpretations:
+ * - INTEGER/FLOAT: direct value
+ * - CHAR: ordinal value
+ * - BOOLEAN: 1 for true, 0 for false
+ * - SET: bitset integer (the set bits directly)
+ * - LIST/QUOTATION: 0 if empty, otherwise not numeric
+ * - STRING: 0 if empty, otherwise not numeric
+ * - FILE: 0 if NULL (failed open), otherwise not numeric
+ */
+bool joy_numeric_value(JoyValue v, double* result) {
+    switch (v.type) {
         case JOY_INTEGER:
-            return a.data.integer == b.data.integer;
+            *result = (double)v.data.integer;
+            return true;
         case JOY_FLOAT:
-            return a.data.floating == b.data.floating;
-        case JOY_BOOLEAN:
-            return a.data.boolean == b.data.boolean;
+            *result = v.data.floating;
+            return true;
         case JOY_CHAR:
-            return a.data.character == b.data.character;
-        case JOY_STRING:
-            return strcmp(a.data.string, b.data.string) == 0;
+            *result = (double)(unsigned char)v.data.character;
+            return true;
+        case JOY_BOOLEAN:
+            *result = v.data.boolean ? 1.0 : 0.0;
+            return true;
         case JOY_SET:
-            return a.data.set == b.data.set;
+            *result = (double)v.data.set;
+            return true;
         case JOY_LIST:
-            if (a.data.list->length != b.data.list->length) return false;
-            for (size_t i = 0; i < a.data.list->length; i++) {
-                if (!joy_value_equal(a.data.list->items[i], b.data.list->items[i])) {
-                    return false;
-                }
+            if (v.data.list->length == 0) {
+                *result = 0.0;
+                return true;
             }
-            return true;
+            return false;
         case JOY_QUOTATION:
-            if (a.data.quotation->length != b.data.quotation->length) return false;
-            for (size_t i = 0; i < a.data.quotation->length; i++) {
-                if (!joy_value_equal(a.data.quotation->terms[i], b.data.quotation->terms[i])) {
-                    return false;
-                }
+            if (v.data.quotation->length == 0) {
+                *result = 0.0;
+                return true;
             }
-            return true;
-        case JOY_SYMBOL:
-            return strcmp(a.data.symbol, b.data.symbol) == 0;
+            return false;
+        case JOY_STRING:
+            if (v.data.string[0] == '\0') {
+                *result = 0.0;
+                return true;
+            }
+            return false;
         case JOY_FILE:
-            return a.data.file == b.data.file;
+            if (v.data.file == NULL) {
+                *result = 0.0;
+                return true;
+            }
+            return false;
+        default:
+            return false;
     }
+}
+
+/* Joy's = equality semantics:
+ * - Non-empty lists/quotations are NEVER equal with =
+ * - Symbols compare by name (with each other and with strings)
+ * - Numeric types compare by value (int, float, char, bool, set, empty containers)
+ */
+bool joy_value_equal(JoyValue a, JoyValue b) {
+    /* Non-empty lists/quotations are never equal with = */
+    if (a.type == JOY_LIST && a.data.list->length > 0) return false;
+    if (a.type == JOY_QUOTATION && a.data.quotation->length > 0) return false;
+    if (b.type == JOY_LIST && b.data.list->length > 0) return false;
+    if (b.type == JOY_QUOTATION && b.data.quotation->length > 0) return false;
+
+    /* Symbol comparison */
+    if (a.type == JOY_SYMBOL && b.type == JOY_SYMBOL) {
+        return strcmp(a.data.symbol, b.data.symbol) == 0;
+    }
+    /* Symbol vs String */
+    if (a.type == JOY_SYMBOL && b.type == JOY_STRING) {
+        return strcmp(a.data.symbol, b.data.string) == 0;
+    }
+    if (a.type == JOY_STRING && b.type == JOY_SYMBOL) {
+        return strcmp(a.data.string, b.data.symbol) == 0;
+    }
+    /* String vs String */
+    if (a.type == JOY_STRING && b.type == JOY_STRING) {
+        return strcmp(a.data.string, b.data.string) == 0;
+    }
+
+    /* Try numeric comparison */
+    double av, bv;
+    if (joy_numeric_value(a, &av) && joy_numeric_value(b, &bv)) {
+        return av == bv;
+    }
+
     return false;
 }
 

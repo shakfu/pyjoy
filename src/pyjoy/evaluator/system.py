@@ -339,12 +339,24 @@ def intern_(ctx: ExecutionContext) -> None:
 
 @joy_word(name="name", params=1, doc="A -> S")
 def name_(ctx: ExecutionContext) -> None:
-    """Convert atom/symbol to string."""
+    """Convert atom/symbol to string, or type name for non-symbols."""
     a = ctx.stack.pop()
     if a.type == JoyType.SYMBOL:
         ctx.stack.push_value(JoyValue.string(a.value))
     else:
-        ctx.stack.push_value(JoyValue.string(repr(a)))
+        # Return Joy type name string (with leading space as per Joy42)
+        type_names = {
+            JoyType.BOOLEAN: " truth value type",
+            JoyType.CHAR: " character type",
+            JoyType.INTEGER: " integer type",
+            JoyType.SET: " set type",
+            JoyType.STRING: " string type",
+            JoyType.LIST: " list type",
+            JoyType.QUOTATION: " list type",
+            JoyType.FLOAT: " float type",
+            JoyType.FILE: " file type",
+        }
+        ctx.stack.push_value(JoyValue.string(type_names.get(a.type, " unknown type")))
 
 
 # -----------------------------------------------------------------------------

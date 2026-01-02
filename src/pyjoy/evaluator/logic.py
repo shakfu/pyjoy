@@ -338,36 +338,57 @@ def _joy_compare(a: JoyValue, b: JoyValue) -> int:
 # -----------------------------------------------------------------------------
 
 
-@joy_word(name="and", params=2, doc="B1 B2 -> B")
+@joy_word(name="and", params=2, doc="B1 B2 -> B | S1 S2 -> S")
 def and_word(ctx: ExecutionContext) -> None:
-    """Logical and."""
+    """Logical and, or set intersection."""
     b, a = ctx.stack.pop_n(2)
-    result = a.is_truthy() and b.is_truthy()
-    ctx.stack.push_value(JoyValue.boolean(result))
+    # Set intersection
+    if a.type == JoyType.SET and b.type == JoyType.SET:
+        result = a.value & b.value
+        ctx.stack.push_value(JoyValue.joy_set(result))
+    else:
+        result = a.is_truthy() and b.is_truthy()
+        ctx.stack.push_value(JoyValue.boolean(result))
 
 
-@joy_word(name="or", params=2, doc="B1 B2 -> B")
+@joy_word(name="or", params=2, doc="B1 B2 -> B | S1 S2 -> S")
 def or_word(ctx: ExecutionContext) -> None:
-    """Logical or."""
+    """Logical or, or set union."""
     b, a = ctx.stack.pop_n(2)
-    result = a.is_truthy() or b.is_truthy()
-    ctx.stack.push_value(JoyValue.boolean(result))
+    # Set union
+    if a.type == JoyType.SET and b.type == JoyType.SET:
+        result = a.value | b.value
+        ctx.stack.push_value(JoyValue.joy_set(result))
+    else:
+        result = a.is_truthy() or b.is_truthy()
+        ctx.stack.push_value(JoyValue.boolean(result))
 
 
-@joy_word(name="not", params=1, doc="B -> B")
+@joy_word(name="not", params=1, doc="B -> B | S -> S")
 def not_word(ctx: ExecutionContext) -> None:
-    """Logical not."""
+    """Logical not, or set complement."""
     a = ctx.stack.pop()
-    result = not a.is_truthy()
-    ctx.stack.push_value(JoyValue.boolean(result))
+    # Set complement (all 64 possible members minus current)
+    if a.type == JoyType.SET:
+        all_members = frozenset(range(64))
+        result = all_members - a.value
+        ctx.stack.push_value(JoyValue.joy_set(result))
+    else:
+        result = not a.is_truthy()
+        ctx.stack.push_value(JoyValue.boolean(result))
 
 
-@joy_word(name="xor", params=2, doc="B1 B2 -> B")
+@joy_word(name="xor", params=2, doc="B1 B2 -> B | S1 S2 -> S")
 def xor_word(ctx: ExecutionContext) -> None:
-    """Logical exclusive or."""
+    """Logical exclusive or, or set symmetric difference."""
     b, a = ctx.stack.pop_n(2)
-    result = a.is_truthy() != b.is_truthy()
-    ctx.stack.push_value(JoyValue.boolean(result))
+    # Set symmetric difference
+    if a.type == JoyType.SET and b.type == JoyType.SET:
+        result = a.value ^ b.value
+        ctx.stack.push_value(JoyValue.joy_set(result))
+    else:
+        result = a.is_truthy() != b.is_truthy()
+        ctx.stack.push_value(JoyValue.boolean(result))
 
 
 # -----------------------------------------------------------------------------

@@ -153,8 +153,9 @@ class TestStackWord:
         assert len(top.value) == 3
 
     def test_unstack_word(self, evaluator):
+        # List is in TOS-first order, so [1 2 3] means 1 becomes TOS
         evaluator.run("[1 2 3] unstack")
         assert evaluator.stack.depth == 3
-        assert evaluator.stack.peek(0).value == 3
+        assert evaluator.stack.peek(0).value == 1
         assert evaluator.stack.peek(1).value == 2
-        assert evaluator.stack.peek(2).value == 1
+        assert evaluator.stack.peek(2).value == 3

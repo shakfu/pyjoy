@@ -2,10 +2,10 @@
 
 ## Current Test Results
 
-**Python Interpreter:** 154/215 tests passing (71.6%)
-**C Backend:** 190/215 tests passing (88.4%)
+**Python Interpreter:** 170/215 tests passing (79.1%)
+**C Backend:** 199/215 tests passing (92.6%)
 
-Note: The Python test count dropped from 186 after fixing the `.` (period) operator to actually print output. This revealed ~45 tests that were silently outputting `false` due to bugs in primitives.
+Note: Recent fixes include set operations for and/or/xor/not, type preservation in map/filter, stack operation fixes, and type system updates.
 
 ---
 
@@ -46,6 +46,18 @@ These bugs were revealed when `.` started printing output:
 
 ## Recently Completed
 
+- [x] `and`/`or`/`xor`/`not` - now handle SETs as set operations (intersection/union/symmetric diff/complement)
+- [x] `map`/`filter`/`split` - preserve STRING and SET types (was always returning LIST)
+- [x] `_make_aggregate` - convert integers to chars when reconstructing strings
+- [x] `rotate` - fixed to `X Y Z -> Z Y X` (flip first and third)
+- [x] `rotated`/`rollupd`/`rolldownd` - fixed stack operations
+- [x] `unstack` - now pushes in reverse order (TOS-first list order)
+- [x] `infra` - fixed stack order (TOS-first for input and output)
+- [x] `list` predicate - now returns true for QUOTATION as well as LIST
+- [x] `some` combinator - empty predicate now tests item truthiness
+- [x] `name` - returns Joy type name strings for non-symbols
+- [x] `typeof` - updated to Joy42 type codes (2=USRDEF, 3=BUILTIN, 4=BOOLEAN, etc.)
+- [x] `_execute_term` - symbol JoyValues now execute instead of being pushed
 - [x] `.` (period) operator - now prints TOS with newline (no-op if stack empty)
 - [x] Octal character escapes in scanner (`'\010` etc.)
 - [x] `equal` in C runtime - LIST/QUOTATION comparison by content

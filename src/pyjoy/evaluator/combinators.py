@@ -58,9 +58,15 @@ def _make_aggregate(items: tuple, original_type: JoyType) -> JoyValue:
     """
     if original_type == JoyType.STRING:
         try:
-            chars = "".join(v.value for v in items if v.type == JoyType.CHAR)
-            return JoyValue.string(chars)
-        except (AttributeError, TypeError):
+            # Accept both CHAR and INTEGER (C treats chars as ints)
+            chars = []
+            for v in items:
+                if v.type == JoyType.CHAR:
+                    chars.append(v.value)
+                elif v.type == JoyType.INTEGER:
+                    chars.append(chr(v.value))
+            return JoyValue.string("".join(chars))
+        except (AttributeError, TypeError, ValueError):
             return JoyValue.list(items)
     elif original_type == JoyType.SET:
         try:
@@ -500,6 +506,7 @@ def map_combinator(ctx: ExecutionContext) -> None:
     quot, agg = ctx.stack.pop_n(2)
     q = expect_quotation(quot, "map")
     items = _get_aggregate(agg, "map")
+    original_type = agg.type
 
     results = []
     for item in items:
@@ -510,8 +517,8 @@ def map_combinator(ctx: ExecutionContext) -> None:
         results.append(result)
         ctx.stack._items = saved
 
-    # Map produces a list, even if input was quotation
-    ctx.stack.push_value(JoyValue.list(tuple(results)))
+    # Preserve original type (STRING, SET, LIST, QUOTATION)
+    ctx.stack.push_value(_make_aggregate(tuple(results), original_type))
 
 
 @joy_word(name="filter", params=2, doc="A [P] -> A'")
@@ -642,15 +649,13 @@ def all_combinator(ctx: ExecutionContext) -> None:
 
 @joy_word(name="some", params=2, doc="A [P] -> B")
 def some_combinator(ctx: ExecutionContext) -> None:
-    """Test if P is true for some (at least one) element of A."""
+    """Test if P is true for some (at least one) element of A.
+
+    With empty predicate, tests if any item is truthy.
+    """
     quot, agg = ctx.stack.pop_n(2)
     q = expect_quotation(quot, "some")
     items = _get_aggregate(agg, "some")
-
-    # Empty predicate returns false
-    if len(q.terms) == 0:
-        ctx.stack.push_value(JoyValue.boolean(False))
-        return
 
     for item in items:
         saved = ctx.stack._items.copy()
@@ -801,10 +806,11 @@ def infra(ctx: ExecutionContext) -> None:
     items = _get_aggregate(lst, "infra")
 
     saved = ctx.stack._items.copy()
-    # Convert all items to JoyValues for the temporary stack
-    ctx.stack._items = [_ensure_joy_value(item) for item in items]
+    # Input list is TOS-first, stack is bottom-first, so reverse
+    ctx.stack._items = [_ensure_joy_value(item) for item in reversed(items)]
     ctx.evaluator.execute(q)
-    result = tuple(ctx.stack._items)
+    # Result should be TOS-first, stack is bottom-first, so reverse
+    result = tuple(reversed(ctx.stack._items))
     ctx.stack._items = saved
     ctx.stack.push_value(JoyValue.list(result))
 

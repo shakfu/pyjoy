@@ -3,8 +3,8 @@
     version : 1.6
     date    : 04/19/24
 *)
-"test" "w" fopen
+"build/test" "w" fopen
 [stdin stdout stderr 3.14 [] "" {} 10 'A true maxint helpdetail sum dummy]
 cons helpdetail.
-$ cat test
-$ rm test
+$ cat build/test
+$ rm build/test

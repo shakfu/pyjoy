@@ -94,6 +94,7 @@ JoyValue joy_file(FILE* file);
 JoyValue joy_value_copy(JoyValue value);
 void joy_value_free(JoyValue* value);
 bool joy_value_equal(JoyValue a, JoyValue b);
+bool joy_numeric_value(JoyValue v, double* result);
 bool joy_value_truthy(JoyValue value);
 void joy_value_print(JoyValue value);
 

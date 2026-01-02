@@ -20,10 +20,10 @@ class TestStackOperations:
 
     def test_rotate(self, evaluator):
         evaluator.run("1 2 3 rotate")
-        # X Y Z -> Y Z X
+        # X Y Z -> Z Y X (flip first and third)
         assert evaluator.stack.peek(0).value == 1  # X moved to top
-        assert evaluator.stack.peek(1).value == 3  # Z
-        assert evaluator.stack.peek(2).value == 2  # Y at bottom
+        assert evaluator.stack.peek(1).value == 2  # Y stays in middle
+        assert evaluator.stack.peek(2).value == 3  # Z at bottom
 
     def test_rollup(self, evaluator):
         evaluator.run("1 2 3 rollup")

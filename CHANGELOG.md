@@ -47,7 +47,7 @@
 
 ### Coverage
 - Python interpreter: 154/215 Joy tests passing (71.6%)
-- C backend: 190/215 Joy tests passing (88.4%)
+- C backend: 199/215 Joy tests passing (92.6%)
 - pytest: 420/420 unit tests passing (100%)
 
 ### Missing Primitives (7)

@@ -438,21 +438,42 @@ static void prim_neq(JoyContext* ctx) {
     joy_value_free(&b);
 }
 
+/* Helper to get comparable value (string for string/symbol, numeric otherwise) */
+static bool joy_can_compare(JoyValue a, JoyValue b, double* av, double* bv,
+                            const char** as, const char** bs) {
+    *as = NULL; *bs = NULL;
+    /* Try numeric comparison first */
+    if (joy_numeric_value(a, av) && joy_numeric_value(b, bv)) {
+        return true;
+    }
+    /* String/symbol comparison */
+    if (a.type == JOY_STRING) *as = a.data.string;
+    else if (a.type == JOY_SYMBOL) *as = a.data.symbol;
+    if (b.type == JOY_STRING) *bs = b.data.string;
+    else if (b.type == JOY_SYMBOL) *bs = b.data.symbol;
+    if (*as && *bs) return true;
+    /* File comparison by pointer */
+    if (a.type == JOY_FILE && b.type == JOY_FILE) {
+        *av = (double)(uintptr_t)a.data.file;
+        *bv = (double)(uintptr_t)b.data.file;
+        return true;
+    }
+    return false;
+}
+
 static void prim_lt(JoyContext* ctx) {
     REQUIRE(2, "<");
     JoyValue b = POP();
     JoyValue a = POP();
     bool result = false;
-    if (a.type == JOY_INTEGER && b.type == JOY_INTEGER) {
-        result = a.data.integer < b.data.integer;
-    } else if (a.type == JOY_FLOAT || b.type == JOY_FLOAT) {
-        double av = a.type == JOY_FLOAT ? a.data.floating : (double)a.data.integer;
-        double bv = b.type == JOY_FLOAT ? b.data.floating : (double)b.data.integer;
-        result = av < bv;
-    } else if (a.type == JOY_CHAR && b.type == JOY_CHAR) {
-        result = a.data.character < b.data.character;
-    } else if (a.type == JOY_STRING && b.type == JOY_STRING) {
-        result = strcmp(a.data.string, b.data.string) < 0;
+    double av, bv;
+    const char *as, *bs;
+    if (joy_can_compare(a, b, &av, &bv, &as, &bs)) {
+        if (as && bs) {
+            result = strcmp(as, bs) < 0;
+        } else {
+            result = av < bv;
+        }
     }
     PUSH(joy_boolean(result));
     joy_value_free(&a);
@@ -464,16 +485,14 @@ static void prim_gt(JoyContext* ctx) {
     JoyValue b = POP();
     JoyValue a = POP();
     bool result = false;
-    if (a.type == JOY_INTEGER && b.type == JOY_INTEGER) {
-        result = a.data.integer > b.data.integer;
-    } else if (a.type == JOY_FLOAT || b.type == JOY_FLOAT) {
-        double av = a.type == JOY_FLOAT ? a.data.floating : (double)a.data.integer;
-        double bv = b.type == JOY_FLOAT ? b.data.floating : (double)b.data.integer;
-        result = av > bv;
-    } else if (a.type == JOY_CHAR && b.type == JOY_CHAR) {
-        result = a.data.character > b.data.character;
-    } else if (a.type == JOY_STRING && b.type == JOY_STRING) {
-        result = strcmp(a.data.string, b.data.string) > 0;
+    double av, bv;
+    const char *as, *bs;
+    if (joy_can_compare(a, b, &av, &bv, &as, &bs)) {
+        if (as && bs) {
+            result = strcmp(as, bs) > 0;
+        } else {
+            result = av > bv;
+        }
     }
     PUSH(joy_boolean(result));
     joy_value_free(&a);
@@ -485,12 +504,14 @@ static void prim_le(JoyContext* ctx) {
     JoyValue b = POP();
     JoyValue a = POP();
     bool result = false;
-    if (a.type == JOY_INTEGER && b.type == JOY_INTEGER) {
-        result = a.data.integer <= b.data.integer;
-    } else if (a.type == JOY_FLOAT || b.type == JOY_FLOAT) {
-        double av = a.type == JOY_FLOAT ? a.data.floating : (double)a.data.integer;
-        double bv = b.type == JOY_FLOAT ? b.data.floating : (double)b.data.integer;
-        result = av <= bv;
+    double av, bv;
+    const char *as, *bs;
+    if (joy_can_compare(a, b, &av, &bv, &as, &bs)) {
+        if (as && bs) {
+            result = strcmp(as, bs) <= 0;
+        } else {
+            result = av <= bv;
+        }
     }
     PUSH(joy_boolean(result));
     joy_value_free(&a);
@@ -502,12 +523,14 @@ static void prim_ge(JoyContext* ctx) {
     JoyValue b = POP();
     JoyValue a = POP();
     bool result = false;
-    if (a.type == JOY_INTEGER && b.type == JOY_INTEGER) {
-        result = a.data.integer >= b.data.integer;
-    } else if (a.type == JOY_FLOAT || b.type == JOY_FLOAT) {
-        double av = a.type == JOY_FLOAT ? a.data.floating : (double)a.data.integer;
-        double bv = b.type == JOY_FLOAT ? b.data.floating : (double)b.data.integer;
-        result = av >= bv;
+    double av, bv;
+    const char *as, *bs;
+    if (joy_can_compare(a, b, &av, &bv, &as, &bs)) {
+        if (as && bs) {
+            result = strcmp(as, bs) >= 0;
+        } else {
+            result = av >= bv;
+        }
     }
     PUSH(joy_boolean(result));
     joy_value_free(&a);
@@ -3904,65 +3927,50 @@ static void prim_of(JoyContext* ctx) {
     joy_value_free(&agg);
 }
 
-/* Helper for compare */
+/* Helper for compare - Joy compare semantics:
+ * - Non-empty lists/quotations: always return 1 (not comparable)
+ * - Strings: lexicographic comparison
+ * - Symbols: 0 if same, 1 if different
+ * - Numeric types (int, float, char, bool, set): compare by value
+ * - Files: 0 if same, compare by pointer otherwise
+ * - Incompatible types: 1
+ */
 static int joy_compare_values(JoyValue a, JoyValue b) {
-    /* Compare two values, return -1, 0, or 1 */
-    if (a.type != b.type) {
-        return (a.type < b.type) ? -1 : 1;
+    /* Non-empty lists/quotations are not comparable - always 1 */
+    if (a.type == JOY_LIST && a.data.list->length > 0) return 1;
+    if (a.type == JOY_QUOTATION && a.data.quotation->length > 0) return 1;
+    if (b.type == JOY_LIST && b.data.list->length > 0) return 1;
+    if (b.type == JOY_QUOTATION && b.data.quotation->length > 0) return 1;
+
+    /* String comparison (lexicographic) */
+    if (a.type == JOY_STRING && b.type == JOY_STRING) {
+        int cmp = strcmp(a.data.string, b.data.string);
+        if (cmp < 0) return -1;
+        if (cmp > 0) return 1;
+        return 0;
     }
 
-    switch (a.type) {
-        case JOY_INTEGER:
-            if (a.data.integer < b.data.integer) return -1;
-            if (a.data.integer > b.data.integer) return 1;
-            return 0;
-        case JOY_FLOAT:
-            if (a.data.floating < b.data.floating) return -1;
-            if (a.data.floating > b.data.floating) return 1;
-            return 0;
-        case JOY_BOOLEAN:
-            if (a.data.boolean < b.data.boolean) return -1;
-            if (a.data.boolean > b.data.boolean) return 1;
-            return 0;
-        case JOY_CHAR:
-            if (a.data.character < b.data.character) return -1;
-            if (a.data.character > b.data.character) return 1;
-            return 0;
-        case JOY_STRING:
-            return strcmp(a.data.string, b.data.string);
-        case JOY_SET:
-            if (a.data.set < b.data.set) return -1;
-            if (a.data.set > b.data.set) return 1;
-            return 0;
-        case JOY_SYMBOL:
-            return strcmp(a.data.symbol, b.data.symbol);
-        case JOY_LIST: {
-            size_t min_len = a.data.list->length < b.data.list->length
-                           ? a.data.list->length : b.data.list->length;
-            for (size_t i = 0; i < min_len; i++) {
-                int cmp = joy_compare_values(a.data.list->items[i],
-                                             b.data.list->items[i]);
-                if (cmp != 0) return cmp;
-            }
-            if (a.data.list->length < b.data.list->length) return -1;
-            if (a.data.list->length > b.data.list->length) return 1;
-            return 0;
-        }
-        case JOY_QUOTATION: {
-            size_t min_len = a.data.quotation->length < b.data.quotation->length
-                           ? a.data.quotation->length : b.data.quotation->length;
-            for (size_t i = 0; i < min_len; i++) {
-                int cmp = joy_compare_values(a.data.quotation->terms[i],
-                                             b.data.quotation->terms[i]);
-                if (cmp != 0) return cmp;
-            }
-            if (a.data.quotation->length < b.data.quotation->length) return -1;
-            if (a.data.quotation->length > b.data.quotation->length) return 1;
-            return 0;
-        }
-        default:
-            return 0;
+    /* Symbol comparison */
+    if (a.type == JOY_SYMBOL && b.type == JOY_SYMBOL) {
+        return strcmp(a.data.symbol, b.data.symbol) == 0 ? 0 : 1;
     }
+
+    /* File comparison */
+    if (a.type == JOY_FILE && b.type == JOY_FILE) {
+        if (a.data.file == b.data.file) return 0;
+        return (uintptr_t)a.data.file < (uintptr_t)b.data.file ? -1 : 1;
+    }
+
+    /* Try numeric comparison */
+    double av, bv;
+    if (joy_numeric_value(a, &av) && joy_numeric_value(b, &bv)) {
+        if (av < bv) return -1;
+        if (av > bv) return 1;
+        return 0;
+    }
+
+    /* Incompatible types */
+    return 1;
 }
 
 static void prim_compare(JoyContext* ctx) {
@@ -3990,7 +3998,7 @@ static JoyValue joy_aggregate_item(JoyValue v, size_t i) {
     return joy_integer(0);
 }
 
-/* Helper for equal - recursive structural equality */
+/* Helper for equal - recursive structural equality (unlike = which is shallow) */
 static bool joy_equal_values(JoyValue a, JoyValue b) {
     /* Same type - direct comparison */
     if (a.type == b.type) {
@@ -4047,11 +4055,14 @@ static bool joy_equal_values(JoyValue a, JoyValue b) {
         return true;
     }
 
-    /* Numeric types can be compared across int/float */
-    if ((a.type == JOY_INTEGER || a.type == JOY_FLOAT) &&
-        (b.type == JOY_INTEGER || b.type == JOY_FLOAT)) {
-        double val_a = (a.type == JOY_INTEGER) ? (double)a.data.integer : a.data.floating;
-        double val_b = (b.type == JOY_INTEGER) ? (double)b.data.integer : b.data.floating;
+    /* Symbol comparison */
+    if (a.type == JOY_SYMBOL && b.type == JOY_SYMBOL) {
+        return strcmp(a.data.symbol, b.data.symbol) == 0;
+    }
+
+    /* Numeric types can be compared across types using joy_numeric_value */
+    double val_a, val_b;
+    if (joy_numeric_value(a, &val_a) && joy_numeric_value(b, &val_b)) {
         return val_a == val_b;
     }
 
