@@ -17,11 +17,30 @@ from pyjoy.types import JoyQuotation, JoyType, JoyValue
 from .core import expect_quotation, joy_word
 
 
+def _term_to_value(term) -> JoyValue:
+    """Convert a quotation term to a JoyValue."""
+    if isinstance(term, JoyValue):
+        return term
+    elif isinstance(term, str):
+        return JoyValue.symbol(term)
+    elif isinstance(term, JoyQuotation):
+        return JoyValue.quotation(term)
+    elif isinstance(term, int):
+        return JoyValue.integer(term)
+    elif isinstance(term, float):
+        return JoyValue.floating(term)
+    elif isinstance(term, bool):
+        return JoyValue.boolean(term)
+    else:
+        return JoyValue.symbol(str(term))
+
+
 def _get_aggregate(v: JoyValue, op: str) -> tuple:
-    """Extract aggregate contents as tuple."""
+    """Extract aggregate contents as tuple (raw terms for quotations)."""
     if v.type == JoyType.LIST:
         return v.value
     elif v.type == JoyType.QUOTATION:
+        # Return raw terms - do NOT convert to JoyValues here
         return v.value.terms
     elif v.type == JoyType.STRING:
         return tuple(JoyValue.char(c) for c in v.value)
@@ -45,8 +64,18 @@ def _make_aggregate(items: tuple, original_type: JoyType) -> JoyValue:
             return JoyValue.joy_set(members)
         except Exception:
             return JoyValue.list(items)
+    elif original_type == JoyType.QUOTATION:
+        # Preserve quotation type - items may be raw terms or JoyValues
+        return JoyValue.quotation(JoyQuotation(items))
     else:
         return JoyValue.list(items)
+
+
+def _ensure_joy_value(item) -> JoyValue:
+    """Ensure item is a JoyValue (convert raw quotation terms if needed)."""
+    if isinstance(item, JoyValue):
+        return item
+    return _term_to_value(item)
 
 
 # -----------------------------------------------------------------------------
@@ -281,20 +310,24 @@ def cond(ctx: ExecutionContext) -> None:
     saved = ctx.stack._items.copy()
 
     for clause in clause_list:
-        if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+        # Clause can be a JoyValue(QUOTATION) or a raw JoyQuotation
+        if isinstance(clause, JoyValue) and clause.type == JoyType.QUOTATION:
+            clause_terms = clause.value.terms
+        elif isinstance(clause, JoyQuotation):
+            clause_terms = clause.terms
+        else:
             raise JoyTypeError("cond", "QUOTATION clause", type(clause).__name__)
-
-        clause_terms = clause.value.terms
         if len(clause_terms) < 1:
             continue
 
         # Last clause might be default (single element)
         if len(clause_terms) == 1:
             ctx.stack._items = saved.copy()
-            if isinstance(clause_terms[0], JoyQuotation):
-                ctx.evaluator.execute(clause_terms[0])
-            elif isinstance(clause_terms[0], JoyValue) and clause_terms[0].type == JoyType.QUOTATION:
-                ctx.evaluator.execute(clause_terms[0].value)
+            term = clause_terms[0]
+            if isinstance(term, JoyQuotation):
+                ctx.evaluator.execute(term)
+            elif isinstance(term, JoyValue) and term.type == JoyType.QUOTATION:
+                ctx.evaluator.execute(term.value)
             return
 
         condition = clause_terms[0]
@@ -342,10 +375,11 @@ def opcase(ctx: ExecutionContext) -> None:
         if len(case_terms) < 2:
             # Default case
             if len(case_terms) == 1:
-                if isinstance(case_terms[0], JoyValue) and case_terms[0].type == JoyType.QUOTATION:
-                    ctx.evaluator.execute(case_terms[0].value)
-                elif isinstance(case_terms[0], JoyQuotation):
-                    ctx.evaluator.execute(case_terms[0])
+                term = case_terms[0]
+                if isinstance(term, JoyValue) and term.type == JoyType.QUOTATION:
+                    ctx.evaluator.execute(term.value)
+                elif isinstance(term, JoyQuotation):
+                    ctx.evaluator.execute(term)
             return
 
         predicate = case_terms[0]
@@ -386,7 +420,7 @@ def step(ctx: ExecutionContext) -> None:
     items = _get_aggregate(agg, "step")
 
     for item in items:
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
 
 
@@ -400,13 +434,14 @@ def map_combinator(ctx: ExecutionContext) -> None:
     results = []
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
         result = ctx.stack.pop()
         results.append(result)
         ctx.stack._items = saved
 
-    ctx.stack.push_value(_make_aggregate(tuple(results), agg.type))
+    # Map produces a list, even if input was quotation
+    ctx.stack.push_value(JoyValue.list(tuple(results)))
 
 
 @joy_word(name="filter", params=2, doc="A [P] -> A'")
@@ -419,15 +454,17 @@ def filter_combinator(ctx: ExecutionContext) -> None:
     results = []
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        joy_item = _ensure_joy_value(item)
+        ctx.stack.push_value(joy_item)
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
         if test_result.is_truthy():
-            results.append(item)
+            results.append(joy_item)
 
-    ctx.stack.push_value(_make_aggregate(tuple(results), agg.type))
+    # Filter produces a list, even if input was quotation
+    ctx.stack.push_value(JoyValue.list(tuple(results)))
 
 
 @joy_word(name="split", params=2, doc="A [P] -> A1 A2")
@@ -441,18 +478,20 @@ def split(ctx: ExecutionContext) -> None:
     not_satisfies = []
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        joy_item = _ensure_joy_value(item)
+        ctx.stack.push_value(joy_item)
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
         if test_result.is_truthy():
-            satisfies.append(item)
+            satisfies.append(joy_item)
         else:
-            not_satisfies.append(item)
+            not_satisfies.append(joy_item)
 
-    ctx.stack.push_value(_make_aggregate(tuple(satisfies), agg.type))
-    ctx.stack.push_value(_make_aggregate(tuple(not_satisfies), agg.type))
+    # Split produces lists, even if input was quotation
+    ctx.stack.push_value(JoyValue.list(tuple(satisfies)))
+    ctx.stack.push_value(JoyValue.list(tuple(not_satisfies)))
 
 
 @joy_word(name="fold", params=3, doc="A V [P] -> V'")
@@ -465,7 +504,7 @@ def fold(ctx: ExecutionContext) -> None:
     acc = init
     for item in items:
         ctx.stack.push_value(acc)
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
         acc = ctx.stack.pop()
 
@@ -480,7 +519,7 @@ def each(ctx: ExecutionContext) -> None:
     items = _get_aggregate(agg, "each")
 
     for item in items:
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
 
 
@@ -493,7 +532,7 @@ def any_combinator(ctx: ExecutionContext) -> None:
 
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
@@ -514,7 +553,7 @@ def all_combinator(ctx: ExecutionContext) -> None:
 
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
@@ -535,7 +574,7 @@ def some_combinator(ctx: ExecutionContext) -> None:
 
     for item in items:
         saved = ctx.stack._items.copy()
-        ctx.stack.push_value(item)
+        ctx.stack.push_value(_ensure_joy_value(item))
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
@@ -675,7 +714,8 @@ def infra(ctx: ExecutionContext) -> None:
     items = _get_aggregate(lst, "infra")
 
     saved = ctx.stack._items.copy()
-    ctx.stack._items = list(items)
+    # Convert all items to JoyValues for the temporary stack
+    ctx.stack._items = [_ensure_joy_value(item) for item in items]
     ctx.evaluator.execute(q)
     result = tuple(ctx.stack._items)
     ctx.stack._items = saved
@@ -952,13 +992,15 @@ def genrec(ctx: ExecutionContext) -> None:
             ctx.evaluator.execute(t)
         else:
             ctx.evaluator.execute(r1)
-            rec_quot = JoyQuotation((
-                JoyValue.quotation(b),
-                JoyValue.quotation(t),
-                JoyValue.quotation(r1),
-                JoyValue.quotation(r2),
-                "genrec",
-            ))
+            rec_quot = JoyQuotation(
+                (
+                    JoyValue.quotation(b),
+                    JoyValue.quotation(t),
+                    JoyValue.quotation(r1),
+                    JoyValue.quotation(r2),
+                    "genrec",
+                )
+            )
             ctx.stack.push_value(JoyValue.quotation(rec_quot))
             ctx.evaluator.execute(r2)
 

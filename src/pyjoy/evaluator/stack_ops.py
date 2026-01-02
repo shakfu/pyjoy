@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pyjoy.errors import JoyTypeError
 from pyjoy.stack import ExecutionContext
-from pyjoy.types import JoyQuotation, JoyType, JoyValue
+from pyjoy.types import JoyType, JoyValue
 
 from .core import joy_word
 

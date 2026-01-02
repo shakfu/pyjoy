@@ -12,7 +12,10 @@ import pytest
 from pyjoy.backends.c.builder import CBuilder, compile_joy_to_c
 from pyjoy.backends.c.converter import CValue, JoyToCConverter
 from pyjoy.backends.c.emitter import CEmitter
-from pyjoy.backends.c.preprocessor import IncludePreprocessor, preprocess_includes, IncludeError
+from pyjoy.backends.c.preprocessor import (
+    IncludeError,
+    preprocess_includes,
+)
 
 # Skip all tests if no C compiler is available
 pytestmark = pytest.mark.skipif(
@@ -557,9 +560,9 @@ class TestIncludePreprocessor:
 
             # Main has both include and local definition
             main_file = tmppath / "main.joy"
-            main_source = '''include "lib.joy"
+            main_source = """include "lib.joy"
 DEFINE double == 2 * .
-5 inc double'''
+5 inc double"""
 
             result = preprocess_includes(main_source, source_path=main_file)
 

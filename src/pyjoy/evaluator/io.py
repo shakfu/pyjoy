@@ -238,6 +238,8 @@ def feof(ctx: ExecutionContext) -> None:
 def ferror(ctx: ExecutionContext) -> None:
     """Test if stream S has an error."""
     stream = ctx.stack.peek()
+    # Validate it's a file (even though we don't use the error flag)
+    _expect_file(stream, "ferror")
     # Python files don't have a simple error flag like C
     # Just return false for now
     ctx.stack.push_value(JoyValue.boolean(False))
@@ -351,6 +353,7 @@ def fgets(ctx: ExecutionContext) -> None:
 def fremove(ctx: ExecutionContext) -> None:
     """Remove file at path P, return success."""
     import os
+
     path = ctx.stack.pop()
     if path.type != JoyType.STRING:
         raise JoyTypeError("fremove", "string", path.type.name)
@@ -365,6 +368,7 @@ def fremove(ctx: ExecutionContext) -> None:
 def frename(ctx: ExecutionContext) -> None:
     """Rename file from P1 to P2, return success."""
     import os
+
     new_path, old_path = ctx.stack.pop_n(2)
     if old_path.type != JoyType.STRING:
         raise JoyTypeError("frename", "string (old)", old_path.type.name)

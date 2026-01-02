@@ -13,9 +13,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, List, Set
 
-from ...parser import Definition, ParseResult, Parser
-from ...types import JoyQuotation, JoyType, JoyValue
 from ...errors import JoySyntaxError
+from ...parser import Definition, Parser, ParseResult
+from ...types import JoyQuotation, JoyType, JoyValue
 
 
 class IncludeError(JoySyntaxError):
@@ -139,7 +139,9 @@ class IncludePreprocessor:
                     list(term.value.terms), base_path
                 )
                 collected_defs.extend(nested_defs)
-                new_terms.append(JoyValue.quotation(JoyQuotation(tuple(processed_terms))))
+                new_terms.append(
+                    JoyValue.quotation(JoyQuotation(tuple(processed_terms)))
+                )
             else:
                 new_terms.append(term)
 
@@ -163,9 +165,7 @@ class IncludePreprocessor:
         """Extract string value from JoyValue."""
         return term.value
 
-    def _process_include(
-        self, filename: str, base_path: Path
-    ) -> List[Definition]:
+    def _process_include(self, filename: str, base_path: Path) -> List[Definition]:
         """
         Process an include directive.
 
@@ -206,9 +206,7 @@ class IncludePreprocessor:
 
             # Recursively process includes in the included file
             new_base = include_path.parent
-            _, nested_defs = self._process_terms(
-                list(result.program.terms), new_base
-            )
+            _, nested_defs = self._process_terms(list(result.program.terms), new_base)
 
             # Collect definitions: nested includes first, then this file's defs
             all_defs: List[Definition] = []

@@ -268,6 +268,7 @@ def compile_joy_to_c(
         result = preprocess_includes(source, source_path=source_path)
     else:
         from ...parser import Parser
+
         parser = Parser()
         result = parser.parse_full(source)
 

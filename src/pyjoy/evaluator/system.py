@@ -19,7 +19,6 @@ from pyjoy.types import JoyQuotation, JoyType, JoyValue
 
 from .core import joy_word
 
-
 # -----------------------------------------------------------------------------
 # Time Operations
 # -----------------------------------------------------------------------------
@@ -92,6 +91,12 @@ def mktime_(ctx: ExecutionContext) -> None:
     if len(items) < 9:
         raise JoyTypeError("mktime", "list of 9 integers", f"list of {len(items)}")
 
+    def _get_isdst(item):
+        """Extract isdst value from item."""
+        if item.type == JoyType.INTEGER:
+            return int(item.value)
+        return 1 if item.value else 0
+
     try:
         tm_tuple = (
             int(items[0].value),  # year
@@ -102,7 +107,7 @@ def mktime_(ctx: ExecutionContext) -> None:
             int(items[5].value),  # sec
             int(items[8].value),  # wday
             int(items[7].value),  # yday
-            int(items[6].value) if items[6].type == JoyType.INTEGER else (1 if items[6].value else 0),  # isdst
+            _get_isdst(items[6]),  # isdst
         )
         result = int(time_module.mktime(tm_tuple))
         ctx.stack.push_value(JoyValue.integer(result))
@@ -124,6 +129,12 @@ def strftime_(ctx: ExecutionContext) -> None:
         ctx.stack.push_value(JoyValue.string(""))
         return
 
+    def _get_isdst(item):
+        """Extract isdst value from item."""
+        if item.type == JoyType.INTEGER:
+            return int(item.value)
+        return 1 if item.value else 0
+
     try:
         tm_tuple = (
             int(items[0].value),
@@ -134,7 +145,7 @@ def strftime_(ctx: ExecutionContext) -> None:
             int(items[5].value),
             int(items[8].value),
             int(items[7].value),
-            int(items[6].value) if items[6].type == JoyType.INTEGER else (1 if items[6].value else 0),
+            _get_isdst(items[6]),
         )
         result = time_module.strftime(fmt.value, tm_tuple)
         ctx.stack.push_value(JoyValue.string(result))
@@ -206,6 +217,7 @@ def quit_(ctx: ExecutionContext) -> None:
 def gc_(ctx: ExecutionContext) -> None:
     """Trigger garbage collection (no-op in Python)."""
     import gc
+
     gc.collect()
 
 
@@ -233,7 +245,9 @@ def format_(ctx: ExecutionContext) -> None:
     prec = j.value
 
     if spec in ("d", "i"):
-        result = f"{int(n.value):*>{width}.{prec}d}" if prec else f"{int(n.value):>{width}d}"
+        result = (
+            f"{int(n.value):*>{width}.{prec}d}" if prec else f"{int(n.value):>{width}d}"
+        )
     elif spec == "o":
         result = f"{int(n.value):>{width}o}"
     elif spec == "x":
@@ -425,16 +439,34 @@ def body_(ctx: ExecutionContext) -> None:
         ctx.stack.push_value(JoyValue.quotation(JoyQuotation(())))
 
 
-@joy_word(name="assign", params=2, doc="X N ->")
+@joy_word(name="assign", params=2, doc="X [N] ->")
 def assign_(ctx: ExecutionContext) -> None:
-    """Assign value X to symbol N (define)."""
+    """Assign value X to symbol [N] or N (define)."""
     name_val, value = ctx.stack.pop_n(2)
-    if name_val.type == JoyType.SYMBOL:
+
+    # Handle quotation containing symbol: X [N] assign
+    if name_val.type == JoyType.QUOTATION:
+        terms = name_val.value.terms
+        if len(terms) == 1:
+            term = terms[0]
+            if isinstance(term, str):
+                name = term
+            elif isinstance(term, JoyValue) and term.type == JoyType.SYMBOL:
+                name = term.value
+            else:
+                raise JoyTypeError("assign", "symbol in quotation", type(term).__name__)
+        else:
+            raise JoyTypeError(
+                "assign",
+                "single symbol quotation",
+                f"quotation with {len(terms)} terms",
+            )
+    elif name_val.type == JoyType.SYMBOL:
         name = name_val.value
     elif name_val.type == JoyType.STRING:
         name = name_val.value
     else:
-        raise JoyTypeError("assign", "symbol or string", name_val.type.name)
+        raise JoyTypeError("assign", "symbol, string, or [symbol]", name_val.type.name)
 
     # Create a quotation that just pushes the value
     ctx.evaluator.define(name, JoyQuotation((value,)))
@@ -557,7 +589,7 @@ def helpdetail_(ctx: ExecutionContext) -> None:
 @joy_word(name="manual", params=0, doc="->")
 def manual_(ctx: ExecutionContext) -> None:
     """Print the manual of all Joy primitives."""
-    from .core import list_primitives, get_primitive
+    from .core import get_primitive, list_primitives
 
     print("Joy Primitives Manual")
     print("=" * 60)

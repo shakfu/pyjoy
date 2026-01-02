@@ -106,8 +106,10 @@ def _values_equal(a: JoyValue, b: JoyValue) -> bool:
             b_items = b.value if b.type == JoyType.LIST else b.value.terms
             if len(a_items) != len(b_items):
                 return False
-            return all(_values_equal(_to_joy_value(x), _to_joy_value(y))
-                      for x, y in zip(a_items, b_items))
+            return all(
+                _values_equal(_to_joy_value(x), _to_joy_value(y))
+                for x, y in zip(a_items, b_items)
+            )
         return a == b
 
     # LIST and QUOTATION can be compared by content
@@ -116,8 +118,10 @@ def _values_equal(a: JoyValue, b: JoyValue) -> bool:
         b_items = b.value if b.type == JoyType.LIST else b.value.terms
         if len(a_items) != len(b_items):
             return False
-        return all(_values_equal(_to_joy_value(x), _to_joy_value(y))
-                  for x, y in zip(a_items, b_items))
+        return all(
+            _values_equal(_to_joy_value(x), _to_joy_value(y))
+            for x, y in zip(a_items, b_items)
+        )
 
     # Numeric types can be compared across int/float
     if a.is_numeric() and b.is_numeric():

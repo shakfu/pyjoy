@@ -14,11 +14,33 @@ from pyjoy.types import JoyQuotation, JoyType, JoyValue
 from .core import joy_word
 
 
+def _term_to_value(term) -> JoyValue:
+    """Convert a quotation term to a JoyValue."""
+    if isinstance(term, JoyValue):
+        return term
+    elif isinstance(term, str):
+        # Symbol
+        return JoyValue.symbol(term)
+    elif isinstance(term, JoyQuotation):
+        return JoyValue.quotation(term)
+    elif isinstance(term, int):
+        return JoyValue.integer(term)
+    elif isinstance(term, float):
+        return JoyValue.floating(term)
+    elif isinstance(term, bool):
+        return JoyValue.boolean(term)
+    else:
+        # Fallback - treat as symbol
+        return JoyValue.symbol(str(term))
+
+
 def _get_aggregate(v: JoyValue, op: str) -> tuple:
-    """Extract aggregate contents as tuple."""
+    """Extract aggregate contents as tuple (raw terms for quotations)."""
     if v.type == JoyType.LIST:
         return v.value
     elif v.type == JoyType.QUOTATION:
+        # Return raw terms - do NOT convert to JoyValues here
+        # Operations that extract single elements will convert as needed
         return v.value.terms
     elif v.type == JoyType.STRING:
         # String as tuple of chars
@@ -45,6 +67,9 @@ def _make_aggregate(items: tuple, original_type: JoyType) -> JoyValue:
             return JoyValue.joy_set(members)
         except Exception:
             return JoyValue.list(items)
+    elif original_type == JoyType.QUOTATION:
+        # Preserve quotation type - items may be raw terms or JoyValues
+        return JoyValue.quotation(JoyQuotation(items))
     else:
         return JoyValue.list(items)
 
@@ -79,7 +104,11 @@ def first(ctx: ExecutionContext) -> None:
     items = _get_aggregate(agg, "first")
     if not items:
         raise JoyEmptyAggregate("first")
-    ctx.stack.push_value(items[0])
+    # Convert raw quotation terms to JoyValue
+    item = items[0]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
 
 
 @joy_word(name="rest", params=1, doc="A -> A")
@@ -100,7 +129,11 @@ def uncons(ctx: ExecutionContext) -> None:
     items = _get_aggregate(agg, "uncons")
     if not items:
         raise JoyEmptyAggregate("uncons")
-    ctx.stack.push_value(items[0])
+    # Convert raw quotation terms to JoyValue
+    item = items[0]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
     ctx.stack.push_value(_make_aggregate(items[1:], agg.type))
 
 
@@ -112,7 +145,11 @@ def unswons(ctx: ExecutionContext) -> None:
     if not items:
         raise JoyEmptyAggregate("unswons")
     ctx.stack.push_value(_make_aggregate(items[1:], agg.type))
-    ctx.stack.push_value(items[0])
+    # Convert raw quotation terms to JoyValue
+    item = items[0]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
 
 
 # -----------------------------------------------------------------------------
@@ -226,7 +263,11 @@ def at(ctx: ExecutionContext) -> None:
     idx = n.value
     if idx < 0 or idx >= len(items):
         raise JoyEmptyAggregate(f"at: index {idx} out of bounds")
-    ctx.stack.push_value(items[idx])
+    # Convert raw quotation terms to JoyValue
+    item = items[idx]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
 
 
 @joy_word(name="of", params=2, doc="N A -> X")
@@ -239,7 +280,11 @@ def of(ctx: ExecutionContext) -> None:
     idx = n.value
     if idx < 0 or idx >= len(items):
         raise JoyEmptyAggregate(f"of: index {idx} out of bounds")
-    ctx.stack.push_value(items[idx])
+    # Convert raw quotation terms to JoyValue
+    item = items[idx]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
 
 
 @joy_word(name="pick", params=2, doc="A I -> X")
@@ -252,7 +297,11 @@ def pick(ctx: ExecutionContext) -> None:
     idx = n.value
     if idx < 0 or idx >= len(items):
         raise JoyEmptyAggregate(f"pick: index {idx} out of bounds")
-    ctx.stack.push_value(items[idx])
+    # Convert raw quotation terms to JoyValue
+    item = items[idx]
+    if agg.type == JoyType.QUOTATION:
+        item = _term_to_value(item)
+    ctx.stack.push_value(item)
 
 
 # -----------------------------------------------------------------------------

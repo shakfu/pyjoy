@@ -6,7 +6,7 @@ Usage:
     python -m pyjoy -e "1 2 +"          # Execute expression
     python -m pyjoy file.joy            # Execute file
     python -m pyjoy compile file.joy    # Compile to C
-    python -m pyjoy test joy/test2      # Run Joy test suite
+    python -m pyjoy test tests/joy      # Run Joy test suite
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import io
 import shutil
 import subprocess
 import sys
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -32,12 +32,14 @@ def create_parser() -> argparse.ArgumentParser:
         description="Joy Programming Language Interpreter",
     )
     parser.add_argument(
-        "-v", "--version",
+        "-v",
+        "--version",
         action="store_true",
         help="Print version and exit",
     )
     parser.add_argument(
-        "-e", "--eval",
+        "-e",
+        "--eval",
         metavar="EXPR",
         help="Evaluate expression and print result",
     )
@@ -64,12 +66,14 @@ def create_parser() -> argparse.ArgumentParser:
         help="Joy source file to compile",
     )
     compile_parser.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         metavar="DIR",
         help="Output directory (default: current directory)",
     )
     compile_parser.add_argument(
-        "-n", "--name",
+        "-n",
+        "--name",
         metavar="NAME",
         help="Output name (default: source file stem)",
     )
@@ -96,12 +100,14 @@ def create_parser() -> argparse.ArgumentParser:
         help="Directory or file to test (default: current directory)",
     )
     test_parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Show output from each test",
     )
     test_parser.add_argument(
-        "-c", "--compile",
+        "-c",
+        "--compile",
         action="store_true",
         help="Also test with C compiler",
     )
@@ -120,7 +126,8 @@ def main() -> int:
     # Check if first arg looks like a file (not a known subcommand)
     if len(sys.argv) > 1:
         first_arg = sys.argv[1]
-        if not first_arg.startswith("-") and first_arg not in ("compile", "test", "run"):
+        known_commands = ("compile", "test", "run")
+        if not first_arg.startswith("-") and first_arg not in known_commands:
             # Likely a file path
             if Path(first_arg).suffix == ".joy" or Path(first_arg).exists():
                 return execute_file(first_arg)
@@ -140,6 +147,7 @@ def main() -> int:
     # No subcommand - handle main parser options
     if args.version:
         from pyjoy import __version__
+
         print(f"pyjoy {__version__}")
         return 0
 
@@ -156,7 +164,10 @@ def cmd_compile(args: argparse.Namespace) -> int:
     from pyjoy.backends.c import compile_joy_to_c
 
     if not shutil.which("gcc") and not shutil.which("clang"):
-        print("Error: No C compiler found. Please install gcc or clang.", file=sys.stderr)
+        print(
+            "Error: No C compiler found. Please install gcc or clang.",
+            file=sys.stderr,
+        )
         return 1
 
     source_path = Path(args.source)
@@ -247,7 +258,11 @@ def cmd_test(args: argparse.Namespace) -> int:
 
     # Summary
     print()
-    print(f"Results: {passed} passed, {failed} failed, {errors} errors out of {len(files)} tests")
+    total = len(files)
+    print(
+        f"Results: {passed} passed, {failed} failed, "
+        f"{errors} errors out of {total} tests"
+    )
 
     if failed_tests and not args.verbose:
         print()
@@ -265,7 +280,9 @@ def cmd_test(args: argparse.Namespace) -> int:
     return 0 if (failed == 0 and errors == 0) else 1
 
 
-def run_single_test(filepath: Path, verbose: bool = False, timeout: float = 5.0) -> tuple[str, str]:
+def run_single_test(
+    filepath: Path, verbose: bool = False, timeout: float = 5.0
+) -> tuple[str, str]:
     """Run a single Joy test file.
 
     Returns: ("pass" | "fail" | "error", output_string)
@@ -286,7 +303,7 @@ def run_single_test(filepath: Path, verbose: bool = False, timeout: float = 5.0)
 
     try:
         # Set timeout (Unix only)
-        if hasattr(signal, 'SIGALRM'):
+        if hasattr(signal, "SIGALRM"):
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(int(timeout))
 
@@ -294,7 +311,7 @@ def run_single_test(filepath: Path, verbose: bool = False, timeout: float = 5.0)
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 evaluator.run(source)
         finally:
-            if hasattr(signal, 'SIGALRM'):
+            if hasattr(signal, "SIGALRM"):
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
 

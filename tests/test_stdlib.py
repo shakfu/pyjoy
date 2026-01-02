@@ -196,8 +196,9 @@ class TestStdlibDefinitions:
         """swoncat == swap concat works."""
         evaluator.run("DEFINE swoncat == swap concat . [1 2] [3 4] swoncat")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        values = [v.value for v in result.value]
+        # Input is quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        values = [v.value for v in result.value.terms]
         assert values == [3, 4, 1, 2]
 
     def test_sequor_definition(self, evaluator):
@@ -247,16 +248,18 @@ class TestAggregateLibrary:
         """unitlist == [] cons works."""
         evaluator.run("DEFINE unitlist == [] cons . 42 unitlist")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        assert len(result.value) == 1
-        assert result.value[0].value == 42
+        # Input is empty quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert len(result.value.terms) == 1
+        assert result.value.terms[0].value == 42
 
     def test_pairlist(self, evaluator):
         """pairlist == [] cons cons works."""
         evaluator.run("DEFINE pairlist == [] cons cons . 1 2 pairlist")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        assert len(result.value) == 2
+        # Input is empty quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert len(result.value.terms) == 2
 
     def test_second(self, evaluator):
         """second == rest first works."""
@@ -272,8 +275,9 @@ class TestAggregateLibrary:
         """shunt == [swons] step works."""
         evaluator.run("DEFINE shunt == [swons] step . [] [1 2 3] shunt")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        values = [v.value for v in result.value]
+        # Input is empty quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        values = [v.value for v in result.value.terms]
         assert values == [3, 2, 1]
 
     def test_sum(self, evaluator):
@@ -293,8 +297,9 @@ class TestAggregateLibrary:
             [1 2 3] [4 5 6] zip
         """)
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        assert len(result.value) == 3
+        # Input is empty quotation from base case, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert len(result.value.terms) == 3
 
 
 class TestNumericalLibrary:

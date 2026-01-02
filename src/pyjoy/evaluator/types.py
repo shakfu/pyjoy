@@ -15,7 +15,6 @@ from pyjoy.types import JoyType, JoyValue
 
 from .core import expect_quotation, joy_word
 
-
 # -----------------------------------------------------------------------------
 # Type Predicates
 # -----------------------------------------------------------------------------
@@ -107,7 +106,8 @@ def sametype(ctx: ExecutionContext) -> None:
 def typeof_(ctx: ExecutionContext) -> None:
     """Return type of X as integer."""
     x = ctx.stack.pop()
-    # Joy type codes: 0=list, 1=bool, 2=char, 3=int, 4=set, 5=string, 6=symbol, 7=float, 8=file
+    # Joy type codes: 0=list, 1=bool, 2=char, 3=int, 4=set,
+    # 5=string, 6=symbol, 7=float, 8=file
     type_codes = {
         JoyType.LIST: 0,
         JoyType.BOOLEAN: 1,

@@ -14,6 +14,22 @@ Public API:
 
 from __future__ import annotations
 
+# Re-export ExecutionContext from stack module for convenience
+from pyjoy.stack import ExecutionContext
+
+# Import all primitive modules to register their words (side-effect imports)
+# The order matters for any dependencies between modules
+from . import (
+    aggregate,  # noqa: F401
+    arithmetic,  # noqa: F401
+    combinators,  # noqa: F401
+    io,  # noqa: F401
+    logic,  # noqa: F401
+    stack_ops,  # noqa: F401
+    system,  # noqa: F401
+    types,  # noqa: F401
+)
+
 # Import core infrastructure
 from .core import (
     Evaluator,
@@ -24,20 +40,6 @@ from .core import (
     list_primitives,
     register_primitive,
 )
-
-# Import all primitive modules to register their words
-# The order matters for any dependencies between modules
-from . import stack_ops
-from . import arithmetic
-from . import logic
-from . import aggregate
-from . import types
-from . import combinators
-from . import io
-from . import system
-
-# Re-export ExecutionContext from stack module for convenience
-from pyjoy.stack import ExecutionContext
 
 __all__ = [
     "Evaluator",

@@ -250,14 +250,16 @@ class TestListOperations:
     def test_cons(self, evaluator):
         evaluator.run("1 [2 3] cons")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        assert len(result.value) == 3
+        # Input is quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert len(result.value.terms) == 3
 
     def test_swons(self, evaluator):
         evaluator.run("[2 3] 1 swons")
         result = evaluator.stack.peek()
-        assert result.type == JoyType.LIST
-        assert len(result.value) == 3
+        # Input is quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert len(result.value.terms) == 3
 
     def test_first(self, evaluator):
         evaluator.run("[1 2 3] first")
@@ -334,8 +336,10 @@ class TestListOperations:
     def test_reverse(self, evaluator):
         evaluator.run("[1 2 3] reverse")
         result = evaluator.stack.peek()
-        assert result.value[0].value == 3
-        assert result.value[2].value == 1
+        # Input is quotation, result is quotation
+        assert result.type == JoyType.QUOTATION
+        assert result.value.terms[0].value == 3
+        assert result.value.terms[2].value == 1
 
     def test_at(self, evaluator):
         evaluator.run("[10 20 30] 1 at")
