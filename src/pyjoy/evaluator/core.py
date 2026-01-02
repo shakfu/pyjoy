@@ -98,6 +98,7 @@ class Evaluator:
         self.ctx = ExecutionContext()
         self.ctx.set_evaluator(self)
         self.definitions: Dict[str, JoyQuotation] = {}
+        self.undeferror: bool = True  # If True, undefined words raise error
         if load_stdlib:
             self._load_stdlib()
 
@@ -162,7 +163,7 @@ class Evaluator:
             name: Symbol name
 
         Raises:
-            JoyUndefinedWord: If symbol is not defined
+            JoyUndefinedWord: If symbol is not defined and undeferror is True
         """
         # Check primitives first
         primitive = get_primitive(name)
@@ -175,7 +176,11 @@ class Evaluator:
             self.execute(self.definitions[name])
             return
 
-        raise JoyUndefinedWord(name)
+        # Undefined word
+        if self.undeferror:
+            raise JoyUndefinedWord(name)
+        # If undeferror is False, push as symbol
+        self.ctx.stack.push_value(JoyValue.symbol(name))
 
     def define(self, name: str, body: JoyQuotation) -> None:
         """

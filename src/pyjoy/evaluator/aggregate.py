@@ -287,20 +287,24 @@ def of(ctx: ExecutionContext) -> None:
     ctx.stack.push_value(item)
 
 
-@joy_word(name="pick", params=2, doc="A I -> X")
+@joy_word(name="pick", params=1, doc="X0 X1 ... Xn N -> X0 X1 ... Xn Xn-N")
 def pick(ctx: ExecutionContext) -> None:
-    """Pick element at index I from aggregate A (like at)."""
-    n, agg = ctx.stack.pop_n(2)
+    """Pick element at index N from stack (0=dup, 1=over)."""
+    n = ctx.stack.pop()
     if n.type != JoyType.INTEGER:
         raise JoyTypeError("pick", "INTEGER", n.type.name)
-    items = _get_aggregate(agg, "pick")
     idx = n.value
-    if idx < 0 or idx >= len(items):
-        raise JoyEmptyAggregate(f"pick: index {idx} out of bounds")
-    # Convert raw quotation terms to JoyValue
-    item = items[idx]
-    if agg.type == JoyType.QUOTATION:
-        item = _term_to_value(item)
+    # Get stack items (don't pop them)
+    stack_items = ctx.stack._items
+    if idx >= len(stack_items):
+        # If index too large, pick the bottom element
+        idx = len(stack_items) - 1
+    if idx < 0:
+        idx = 0
+    if not stack_items:
+        raise JoyEmptyAggregate("pick: stack is empty")
+    # Pick from top: 0 = TOS, 1 = second from top, etc.
+    item = stack_items[-(idx + 1)]
     ctx.stack.push_value(item)
 
 

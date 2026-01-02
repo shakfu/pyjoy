@@ -4,7 +4,7 @@ pyjoy.evaluator.combinators - Higher-order combinators.
 Contains: i, x, dip, dipd, dipdd, keep, nullary, unary, binary, ternary,
 ifte, branch, cond, step, map, filter, fold, each, any, all, some, split,
 times, while, loop, bi, tri, cleave, spread, infra, app1-4, compose,
-primrec, linrec, binrec, tailrec, genrec, condnestrec, construct,
+primrec, linrec, binrec, tailrec, genrec, condlinrec, condnestrec, construct,
 unary2, unary3, unary4, opcase, treestep, treerec, treegenrec
 """
 
@@ -415,52 +415,66 @@ def case(ctx: ExecutionContext) -> None:
             return
 
 
-@joy_word(name="opcase", params=2, doc="X [[P1 Q1] [P2 Q2] ...] -> ...")
+@joy_word(name="opcase", params=2, doc="X [..[X Xs]..] -> [Xs]")
 def opcase(ctx: ExecutionContext) -> None:
-    """Case dispatch based on type of X."""
+    """Indexing on type of X, returns matching case body as list."""
     cases, x = ctx.stack.pop_n(2)
     case_list = _get_aggregate(cases, "opcase")
 
-    ctx.stack.push_value(x)
+    def types_match(pattern, value: JoyValue) -> bool:
+        """Check if pattern matches value by type (and value for symbols)."""
+        if isinstance(pattern, JoyValue):
+            if pattern.type != value.type:
+                return False
+            # For symbols, also check the value matches
+            if pattern.type == JoyType.SYMBOL:
+                return pattern.value == value.value
+            return True
+        elif isinstance(pattern, str):
+            # Pattern is a symbol name
+            if value.type != JoyType.SYMBOL:
+                return False
+            return pattern == value.value
+        return False
 
-    for case in case_list:
-        if not isinstance(case, JoyValue) or case.type != JoyType.QUOTATION:
+    def get_case_terms(case):
+        """Extract terms from a case (handles both JoyValue and JoyQuotation)."""
+        if isinstance(case, JoyValue) and case.type == JoyType.QUOTATION:
+            return case.value.terms
+        elif isinstance(case, JoyQuotation):
+            return case.terms
+        return None
+
+    # Iterate through cases (except last which is default)
+    for i, case in enumerate(case_list):
+        case_terms = get_case_terms(case)
+        if case_terms is None:
             continue
 
-        case_terms = case.value.terms
-        if len(case_terms) < 2:
-            # Default case
-            if len(case_terms) == 1:
-                term = case_terms[0]
-                if isinstance(term, JoyValue) and term.type == JoyType.QUOTATION:
-                    ctx.evaluator.execute(term.value)
-                elif isinstance(term, JoyQuotation):
-                    ctx.evaluator.execute(term)
+        is_last = (i == len(case_list) - 1)
+
+        if is_last:
+            # Last case is default - return entire case as list
+            ctx.stack.push_value(JoyValue.list(tuple(
+                _term_to_value(t) for t in case_terms
+            )))
             return
 
-        predicate = case_terms[0]
-        body = case_terms[1]
+        if len(case_terms) < 1:
+            continue
 
-        # Test predicate
-        saved = ctx.stack._items.copy()
-        if isinstance(predicate, JoyValue) and predicate.type == JoyType.QUOTATION:
-            ctx.evaluator.execute(predicate.value)
-        elif isinstance(predicate, JoyQuotation):
-            ctx.evaluator.execute(predicate)
-        elif isinstance(predicate, str):
-            ctx.evaluator._execute_symbol(predicate)
-        else:
-            ctx.stack.push_value(predicate)
+        pattern = case_terms[0]
+        body = case_terms[1:]
 
-        test_result = ctx.stack.pop()
-        ctx.stack._items = saved
-
-        if test_result.is_truthy():
-            if isinstance(body, JoyValue) and body.type == JoyType.QUOTATION:
-                ctx.evaluator.execute(body.value)
-            elif isinstance(body, JoyQuotation):
-                ctx.evaluator.execute(body)
+        if types_match(pattern, x):
+            # Match found - return body as list
+            ctx.stack.push_value(JoyValue.list(tuple(
+                _term_to_value(t) for t in body
+            )))
             return
+
+    # No match and no default - push empty list
+    ctx.stack.push_value(JoyValue.list(()))
 
 
 # -----------------------------------------------------------------------------
@@ -726,19 +740,26 @@ def tri(ctx: ExecutionContext) -> None:
     ctx.evaluator.execute(r)
 
 
-@joy_word(name="cleave", params=2, doc="X [P1 P2 ...] -> ...")
+@joy_word(name="cleave", params=3, doc="X [P1] [P2] -> R1 R2")
 def cleave(ctx: ExecutionContext) -> None:
-    """Apply each quotation in list to X."""
-    quots, x = ctx.stack.pop_n(2)
-    quot_list = _get_aggregate(quots, "cleave")
+    """Execute P1 and P2, each with X on top, producing two results."""
+    p2_quot, p1_quot, x = ctx.stack.pop_n(3)
+    p1 = expect_quotation(p1_quot, "cleave")
+    p2 = expect_quotation(p2_quot, "cleave")
 
-    for q_val in quot_list:
-        if isinstance(q_val, JoyValue) and q_val.type == JoyType.QUOTATION:
-            ctx.stack.push_value(x)
-            ctx.evaluator.execute(q_val.value)
-        elif isinstance(q_val, JoyQuotation):
-            ctx.stack.push_value(x)
-            ctx.evaluator.execute(q_val)
+    # Execute P1 with X, save result
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(p1)
+    r1 = ctx.stack.pop()
+
+    # Execute P2 with X, get result
+    ctx.stack.push_value(x)
+    ctx.evaluator.execute(p2)
+    r2 = ctx.stack.pop()
+
+    # Push both results
+    ctx.stack.push_value(r1)
+    ctx.stack.push_value(r2)
 
 
 @joy_word(name="spread", params=2, doc="X Y ... [P1 P2 ...] -> ...")
@@ -879,28 +900,33 @@ def app4(ctx: ExecutionContext) -> None:
         ctx.stack.push_value(r)
 
 
-@joy_word(name="construct", params=2, doc="[P] [[Q1] [Q2] ...] -> X")
+@joy_word(name="construct", params=2, doc="[P] [[Q1] [Q2] ...] -> R1 R2 ...")
 def construct(ctx: ExecutionContext) -> None:
-    """Execute P, then apply each Qi to build list of results."""
+    """Save stack, execute P, then apply each Qi pushing results to saved stack."""
     quots, p_quot = ctx.stack.pop_n(2)
     p = expect_quotation(p_quot, "construct")
     quot_list = _get_aggregate(quots, "construct")
 
-    # Execute P to prepare the stack
+    # Save original stack state
+    original_stack = ctx.stack._items.copy()
+
+    # Execute P to prepare the working stack
     ctx.evaluator.execute(p)
 
-    # Apply each quotation and collect results
-    results = []
+    # Save the state after P for repeated use
+    after_p = ctx.stack._items.copy()
+
+    # Apply each quotation, pushing results onto original stack
     for q_val in quot_list:
-        saved = ctx.stack._items.copy()
+        ctx.stack._items = after_p.copy()
         if isinstance(q_val, JoyValue) and q_val.type == JoyType.QUOTATION:
             ctx.evaluator.execute(q_val.value)
         elif isinstance(q_val, JoyQuotation):
             ctx.evaluator.execute(q_val)
-        results.append(ctx.stack.pop())
-        ctx.stack._items = saved
+        original_stack.append(ctx.stack.pop())
 
-    ctx.stack.push_value(JoyValue.list(tuple(results)))
+    # Restore to original stack with results appended
+    ctx.stack._items = original_stack
 
 
 @joy_word(name="compose", params=2, doc="[P] [Q] -> [[P] [Q] concat]")
@@ -921,18 +947,22 @@ def compose(ctx: ExecutionContext) -> None:
 
 @joy_word(name="primrec", params=3, doc="X [I] [C] -> R")
 def primrec(ctx: ExecutionContext) -> None:
-    """Primitive recursion."""
+    """Primitive recursion.
+
+    Pushes all members of X onto stack, executes I for initial value,
+    then executes C repeatedly to combine.
+    """
     c_quot, i_quot, x = ctx.stack.pop_n(3)
     i = expect_quotation(i_quot, "primrec")
     c = expect_quotation(c_quot, "primrec")
 
-    ctx.evaluator.execute(i)
-
+    # First, push all members onto stack
+    n = 0
     if x.type == JoyType.INTEGER:
-        n = x.value
-        for j in range(1, n + 1):
+        # For integer: push n, n-1, ..., 2, 1 (so 1 ends up on top)
+        for j in range(x.value, 0, -1):
             ctx.stack.push(j)
-            ctx.evaluator.execute(c)
+            n += 1
     elif x.type in (JoyType.LIST, JoyType.QUOTATION):
         items = x.value if x.type == JoyType.LIST else x.value.terms
         for item in items:
@@ -940,17 +970,24 @@ def primrec(ctx: ExecutionContext) -> None:
                 ctx.stack.push_value(item)
             else:
                 ctx.stack.push(item)
-            ctx.evaluator.execute(c)
+            n += 1
     elif x.type == JoyType.STRING:
         for ch in x.value:
             ctx.stack.push(ch)
-            ctx.evaluator.execute(c)
+            n += 1
     elif x.type == JoyType.SET:
         for member in sorted(x.value):
             ctx.stack.push(member)
-            ctx.evaluator.execute(c)
+            n += 1
     else:
         raise JoyTypeError("primrec", "integer or aggregate", x.type.name)
+
+    # Execute I for initial value
+    ctx.evaluator.execute(i)
+
+    # Execute C n times to combine
+    for _ in range(n):
+        ctx.evaluator.execute(c)
 
 
 @joy_word(name="linrec", params=4, doc="[P] [T] [R1] [R2] -> ...")
@@ -1063,6 +1100,93 @@ def genrec(ctx: ExecutionContext) -> None:
     genrec_aux()
 
 
+@joy_word(name="condlinrec", params=1, doc="[[C1] [C2] ... [D]] -> ...")
+def condlinrec(ctx: ExecutionContext) -> None:
+    """Conditional linear recursion.
+
+    Each [Ci] is [[B] [T]] or [[B] [R1] [R2]].
+    Tests each B. If true and just [T], executes T and exits.
+    If true and [R1] [R2], executes R1, recurses, executes R2.
+    Last clause [D] is default: [[T]] or [[R1] [R2]] (no condition).
+    """
+    clauses = ctx.stack.pop()
+    clause_list = _get_aggregate(clauses, "condlinrec")
+
+    if not clause_list:
+        return
+
+    def condlinrec_aux() -> None:
+        saved = ctx.stack._items.copy()
+
+        # Test all clauses except last (which is default)
+        matched = False
+        matched_idx = len(clause_list) - 1  # Default to last
+
+        for i in range(len(clause_list) - 1):
+            clause = clause_list[i]
+            if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+                continue
+            clause_terms = clause.value.terms
+            if len(clause_terms) < 2:
+                continue
+
+            # Test condition B (first element)
+            ctx.stack._items = saved.copy()
+            condition = clause_terms[0]
+            if isinstance(condition, JoyValue) and condition.type == JoyType.QUOTATION:
+                ctx.evaluator.execute(condition.value)
+            elif isinstance(condition, JoyQuotation):
+                ctx.evaluator.execute(condition)
+            else:
+                ctx.evaluator._execute_term(condition)
+
+            test_result = ctx.stack.pop()
+            if test_result.is_truthy():
+                matched = True
+                matched_idx = i
+                break
+
+        # Restore stack
+        ctx.stack._items = saved
+
+        # Get clause to execute
+        clause = clause_list[matched_idx]
+        if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+            return
+        clause_terms = clause.value.terms
+
+        # Determine parts to execute:
+        # If matched: skip B (element 0), use elements 1+ as [T] or [R1 R2...]
+        # If default: use all elements as [T] or [R1 R2...]
+        start_idx = 1 if matched else 0
+        parts = clause_terms[start_idx:]
+
+        if not parts:
+            return
+
+        # Execute first part
+        first_part = parts[0]
+        if isinstance(first_part, JoyValue) and first_part.type == JoyType.QUOTATION:
+            ctx.evaluator.execute(first_part.value)
+        elif isinstance(first_part, JoyQuotation):
+            ctx.evaluator.execute(first_part)
+        else:
+            ctx.evaluator._execute_term(first_part)
+
+        # For each subsequent part: recurse, then execute
+        for j in range(1, len(parts)):
+            condlinrec_aux()
+            part = parts[j]
+            if isinstance(part, JoyValue) and part.type == JoyType.QUOTATION:
+                ctx.evaluator.execute(part.value)
+            elif isinstance(part, JoyQuotation):
+                ctx.evaluator.execute(part)
+            else:
+                ctx.evaluator._execute_term(part)
+
+    condlinrec_aux()
+
+
 @joy_word(name="condnestrec", params=1, doc="[[B1 R1] [B2 R2] ... [D]] -> ...")
 def condnestrec(ctx: ExecutionContext) -> None:
     """Conditional nested recursion."""
@@ -1167,53 +1291,56 @@ def treestep(ctx: ExecutionContext) -> None:
 
 @joy_word(name="treerec", params=3, doc="T [O] [C] -> ...")
 def treerec(ctx: ExecutionContext) -> None:
-    """Tree recursion with operator O and combiner C."""
+    """Tree recursion: If T is leaf, execute O. Else execute [[O] [C] treerec] C."""
     c_quot, o_quot, tree = ctx.stack.pop_n(3)
     o = expect_quotation(o_quot, "treerec")
     c = expect_quotation(c_quot, "treerec")
 
-    def rec_tree(node: JoyValue) -> None:
+    def treerec_aux(node: JoyValue) -> None:
         if node.type in (JoyType.LIST, JoyType.QUOTATION):
-            items = node.value if node.type == JoyType.LIST else node.value.terms
-            results = []
-            for item in items:
-                if isinstance(item, JoyValue):
-                    saved = ctx.stack._items.copy()
-                    rec_tree(item)
-                    results.append(ctx.stack.pop())
-                    ctx.stack._items = saved
-            ctx.stack.push_value(JoyValue.list(tuple(results)))
+            # Non-leaf: push node, push [[O] [C] treerec], execute C
+            ctx.stack.push_value(node)
+            # Build the recursive quotation [[O] [C] treerec]
+            rec_quot = JoyQuotation((
+                JoyValue.quotation(o),
+                JoyValue.quotation(c),
+                "treerec",
+            ))
+            ctx.stack.push_value(JoyValue.quotation(rec_quot))
             ctx.evaluator.execute(c)
         else:
+            # Leaf: push node, execute O
             ctx.stack.push_value(node)
             ctx.evaluator.execute(o)
 
-    rec_tree(tree)
+    treerec_aux(tree)
 
 
 @joy_word(name="treegenrec", params=4, doc="T [O1] [O2] [C] -> ...")
 def treegenrec(ctx: ExecutionContext) -> None:
-    """General tree recursion."""
+    """General tree recursion.
+
+    If T is leaf, execute O1. Else execute O2 then [[O1] [O2] [C] treegenrec] C.
+    """
     c_quot, o2_quot, o1_quot, tree = ctx.stack.pop_n(4)
     o1 = expect_quotation(o1_quot, "treegenrec")
     o2 = expect_quotation(o2_quot, "treegenrec")
     c = expect_quotation(c_quot, "treegenrec")
 
-    def rec_tree(node: JoyValue) -> None:
-        if node.type in (JoyType.LIST, JoyType.QUOTATION):
-            items = node.value if node.type == JoyType.LIST else node.value.terms
-            ctx.evaluator.execute(o1)
-            results = []
-            for item in items:
-                if isinstance(item, JoyValue):
-                    saved = ctx.stack._items.copy()
-                    rec_tree(item)
-                    results.append(ctx.stack.pop())
-                    ctx.stack._items = saved
-            ctx.stack.push_value(JoyValue.list(tuple(results)))
-            ctx.evaluator.execute(c)
-        else:
-            ctx.stack.push_value(node)
-            ctx.evaluator.execute(o2)
-
-    rec_tree(tree)
+    if tree.type in (JoyType.LIST, JoyType.QUOTATION):
+        # Non-leaf: push tree, execute O2, push [[O1] [O2] [C] treegenrec], execute C
+        ctx.stack.push_value(tree)
+        ctx.evaluator.execute(o2)
+        # Build the recursive quotation [[O1] [O2] [C] treegenrec]
+        rec_quot = JoyQuotation((
+            JoyValue.quotation(o1),
+            JoyValue.quotation(o2),
+            JoyValue.quotation(c),
+            "treegenrec",
+        ))
+        ctx.stack.push_value(JoyValue.quotation(rec_quot))
+        ctx.evaluator.execute(c)
+    else:
+        # Leaf: push tree, execute O1
+        ctx.stack.push_value(tree)
+        ctx.evaluator.execute(o1)

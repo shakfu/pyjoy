@@ -345,7 +345,13 @@ def frexp_(ctx: ExecutionContext) -> None:
 def ldexp_(ctx: ExecutionContext) -> None:
     """Compute F * 2^I."""
     b, a = ctx.stack.pop_n(2)
-    result = _math.ldexp(_numeric_value(a), int(_numeric_value(b)))
+    mantissa = _numeric_value(a)
+    exponent = int(_numeric_value(b))
+    try:
+        result = _math.ldexp(mantissa, exponent)
+    except OverflowError:
+        # Return infinity with appropriate sign
+        result = float("inf") if mantissa >= 0 else float("-inf")
     ctx.stack.push_value(JoyValue.floating(result))
 
 

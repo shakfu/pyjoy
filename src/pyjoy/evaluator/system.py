@@ -245,9 +245,16 @@ def format_(ctx: ExecutionContext) -> None:
     prec = j.value
 
     if spec in ("d", "i"):
-        result = (
-            f"{int(n.value):*>{width}.{prec}d}" if prec else f"{int(n.value):>{width}d}"
-        )
+        # For integers, prec means minimum digits (zero-padded)
+        val = int(n.value)
+        if prec:
+            # Zero-pad to prec digits, then space-pad to width
+            int_str = f"{abs(val):0{prec}d}"
+            if val < 0:
+                int_str = "-" + int_str
+            result = f"{int_str:>{width}}"
+        else:
+            result = f"{val:>{width}d}"
     elif spec == "o":
         result = f"{int(n.value):>{width}o}"
     elif spec == "x":
@@ -472,6 +479,44 @@ def assign_(ctx: ExecutionContext) -> None:
     ctx.evaluator.define(name, JoyQuotation((value,)))
 
 
+@joy_word(name="unassign", params=1, doc="[N] ->")
+def unassign_(ctx: ExecutionContext) -> None:
+    """Remove definition of symbol [N] or N."""
+    name_val = ctx.stack.pop()
+
+    # Handle quotation containing symbol: [N] unassign
+    if name_val.type == JoyType.QUOTATION:
+        terms = name_val.value.terms
+        if len(terms) == 1:
+            term = terms[0]
+            if isinstance(term, str):
+                name = term
+            elif isinstance(term, JoyValue) and term.type == JoyType.SYMBOL:
+                name = term.value
+            else:
+                raise JoyTypeError(
+                    "unassign", "symbol in quotation", type(term).__name__
+                )
+        else:
+            raise JoyTypeError(
+                "unassign",
+                "single symbol quotation",
+                f"quotation with {len(terms)} terms",
+            )
+    elif name_val.type == JoyType.SYMBOL:
+        name = name_val.value
+    elif name_val.type == JoyType.STRING:
+        name = name_val.value
+    else:
+        raise JoyTypeError(
+            "unassign", "symbol, string, or [symbol]", name_val.type.name
+        )
+
+    # Remove from definitions if present
+    if name in ctx.evaluator.definitions:
+        del ctx.evaluator.definitions[name]
+
+
 # -----------------------------------------------------------------------------
 # Interpreter State
 # -----------------------------------------------------------------------------
@@ -491,8 +536,9 @@ def setautoput_(ctx: ExecutionContext) -> None:
 
 @joy_word(name="setundeferror", params=1, doc="I ->")
 def setundeferror_(ctx: ExecutionContext) -> None:
-    """Set undefined error mode (stub)."""
-    ctx.stack.pop()
+    """Set undefined error mode. 0=no error, nonzero=error on undefined."""
+    val = ctx.stack.pop()
+    ctx.evaluator.undeferror = val.is_truthy()
 
 
 @joy_word(name="autoput", params=0, doc="-> I")
@@ -503,8 +549,8 @@ def autoput_(ctx: ExecutionContext) -> None:
 
 @joy_word(name="undeferror", params=0, doc="-> I")
 def undeferror_(ctx: ExecutionContext) -> None:
-    """Get undefined error mode (stub, returns 0)."""
-    ctx.stack.push_value(JoyValue.integer(0))
+    """Get undefined error mode. 0=no error, 1=error on undefined."""
+    ctx.stack.push_value(JoyValue.integer(1 if ctx.evaluator.undeferror else 0))
 
 
 @joy_word(name="echo", params=0, doc="-> I")

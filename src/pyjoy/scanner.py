@@ -44,7 +44,7 @@ class Scanner:
         ("PERIOD", r"\."),  # .
         ("DEF_OP", r"=="),  # == (definition operator)
         # Keywords must come before SYMBOL to match first
-        ("DEFINE_KW", r"\b(?:DEFINE|LIBRA)\b"),  # DEFINE or LIBRA keyword
+        ("DEFINE_KW", r"\b(?:DEFINE|LIBRA|CONST)\b"),  # DEFINE, LIBRA, or CONST keyword
         ("HIDE_KW", r"\bHIDE\b"),  # HIDE keyword
         ("IN_KW", r"\bIN\b"),  # IN keyword
         ("PUBLIC_KW", r"\bPUBLIC\b"),  # PUBLIC keyword
@@ -52,7 +52,8 @@ class Scanner:
         ("END_KW", r"\bEND\b"),  # END keyword
         ("MODULE_KW", r"\bMODULE\b"),  # MODULE keyword
         # Word: identifier or operator symbols
-        ("SYMBOL", r"[a-zA-Z_][a-zA-Z0-9_\-]*|[+\-*/<=>&|!?@#$%^~:]+"),
+        # Also allow -name pattern for symbols like -inf
+        ("SYMBOL", r"[a-zA-Z_][a-zA-Z0-9_\-]*|-[a-zA-Z_][a-zA-Z0-9_\-]*|[+\-*/<=>&|!?@#$%^~:]+"), # noqa: E501
         ("WHITESPACE", r"\s+"),  # whitespace
     ]
 
