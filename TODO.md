@@ -2,11 +2,11 @@
 
 ## Current Test Results
 
-**Python Interpreter:** 194/215 tests passing (90.2%)
+**Python Interpreter:** 198/215 tests passing (92.1%)
 **C Backend:** 199/215 tests passing (92.6%)
-**pytest (unit tests):** 430/430 passing (100%)
+**pytest (unit tests):** 712/712 passing (100%)
 
-Note: Recent fixes include `case` combinator (default case semantics), Float/SET bit-level equality (IEEE 754), iterative linrec combinator, and new primitives.
+Note: Recent fixes include `app11`, `treestep`, `condlinrec`, and `condnestrec` combinators.
 
 ---
 
@@ -16,10 +16,12 @@ Note: Recent fixes include `case` combinator (default case semantics), Float/SET
 
 | Test | Issue |
 |------|-------|
-| condlinrec.joy, condnestrec.joy | Conditional recursion combinator bugs |
-| app11.joy | app11 not consuming all expected args |
-| treestep.joy | Tree step combinator issue |
 | argc.joy, argv.joy | Command-line argument test environment mismatch |
+| ldexp.joy | Prelib loading message appears in output |
+| maxint.joy | Python arbitrary precision differs from Joy64 fixed 64-bit |
+| mktime.joy, strftime.joy | Time function format/behavior differences |
+| strtol.joy, sametype.joy | Minor primitive differences |
+| fflush.joy | File flush behavior |
 
 ### Test Categories (Non-Bug)
 
@@ -33,6 +35,10 @@ Note: Recent fixes include `case` combinator (default case semantics), Float/SET
 
 ## Recently Completed
 
+- [x] `app11` combinator - Fixed to clear stack before applying quotation to X and Y
+- [x] `treestep` combinator - Fixed to handle JoyQuotation objects in tree structure
+- [x] `condlinrec` combinator - Fixed clause handling for JoyQuotation types
+- [x] `condnestrec` combinator - Unified with condlinrec (same semantics as C runtime)
 - [x] `case` combinator - Fixed default case semantics (last clause is always default, X preserved)
 - [x] Float/SET bit-level equality - `3.14159 {bits} =` now compares IEEE 754 bit representation
 - [x] Iterative `linrec` combinator - Prevents Python stack overflow with deep recursion (e.g., `from-to-list 1 14000`)

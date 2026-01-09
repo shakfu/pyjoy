@@ -858,9 +858,12 @@ def app1(ctx: ExecutionContext) -> None:
 
 @joy_word(name="app11", params=3, doc="X Y [P] -> Z")
 def app11(ctx: ExecutionContext) -> None:
-    """Apply P to X and Y."""
+    """Apply P to X and Y on clean stack, producing one result."""
     quot, y, x = ctx.stack.pop_n(3)
     q = expect_quotation(quot, "app11")
+
+    # Execute on fresh stack with just (x, y)
+    ctx.stack.clear()
     ctx.stack.push_value(x)
     ctx.stack.push_value(y)
     ctx.evaluator.execute(q)
@@ -1161,6 +1164,25 @@ def genrec(ctx: ExecutionContext) -> None:
     genrec_aux()
 
 
+def _get_clause_terms(clause) -> tuple | None:
+    """Extract terms from a clause (handles both JoyQuotation and JoyValue)."""
+    if isinstance(clause, JoyQuotation):
+        return clause.terms
+    elif isinstance(clause, JoyValue) and clause.type == JoyType.QUOTATION:
+        return clause.value.terms
+    return None
+
+
+def _execute_quotation_or_term(ctx: ExecutionContext, item) -> None:
+    """Execute a quotation or single term."""
+    if isinstance(item, JoyQuotation):
+        ctx.evaluator.execute(item)
+    elif isinstance(item, JoyValue) and item.type == JoyType.QUOTATION:
+        ctx.evaluator.execute(item.value)
+    else:
+        ctx.evaluator._execute_term(item)
+
+
 @joy_word(name="condlinrec", params=1, doc="[[C1] [C2] ... [D]] -> ...")
 def condlinrec(ctx: ExecutionContext) -> None:
     """Conditional linear recursion.
@@ -1185,21 +1207,14 @@ def condlinrec(ctx: ExecutionContext) -> None:
 
         for i in range(len(clause_list) - 1):
             clause = clause_list[i]
-            if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
-                continue
-            clause_terms = clause.value.terms
-            if len(clause_terms) < 2:
+            clause_terms = _get_clause_terms(clause)
+            if clause_terms is None or len(clause_terms) < 2:
                 continue
 
             # Test condition B (first element)
             ctx.stack._items = saved.copy()
             condition = clause_terms[0]
-            if isinstance(condition, JoyValue) and condition.type == JoyType.QUOTATION:
-                ctx.evaluator.execute(condition.value)
-            elif isinstance(condition, JoyQuotation):
-                ctx.evaluator.execute(condition)
-            else:
-                ctx.evaluator._execute_term(condition)
+            _execute_quotation_or_term(ctx, condition)
 
             test_result = ctx.stack.pop()
             if _is_truthy(test_result):
@@ -1212,9 +1227,9 @@ def condlinrec(ctx: ExecutionContext) -> None:
 
         # Get clause to execute
         clause = clause_list[matched_idx]
-        if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+        clause_terms = _get_clause_terms(clause)
+        if clause_terms is None:
             return
-        clause_terms = clause.value.terms
 
         # Determine parts to execute:
         # If matched: skip B (element 0), use elements 1+ as [T] or [R1 R2...]
@@ -1226,102 +1241,81 @@ def condlinrec(ctx: ExecutionContext) -> None:
             return
 
         # Execute first part
-        first_part = parts[0]
-        if isinstance(first_part, JoyValue) and first_part.type == JoyType.QUOTATION:
-            ctx.evaluator.execute(first_part.value)
-        elif isinstance(first_part, JoyQuotation):
-            ctx.evaluator.execute(first_part)
-        else:
-            ctx.evaluator._execute_term(first_part)
+        _execute_quotation_or_term(ctx, parts[0])
 
         # For each subsequent part: recurse, then execute
         for j in range(1, len(parts)):
             condlinrec_aux()
-            part = parts[j]
-            if isinstance(part, JoyValue) and part.type == JoyType.QUOTATION:
-                ctx.evaluator.execute(part.value)
-            elif isinstance(part, JoyQuotation):
-                ctx.evaluator.execute(part)
-            else:
-                ctx.evaluator._execute_term(part)
+            _execute_quotation_or_term(ctx, parts[j])
 
     condlinrec_aux()
 
 
 @joy_word(name="condnestrec", params=1, doc="[[B1 R1] [B2 R2] ... [D]] -> ...")
 def condnestrec(ctx: ExecutionContext) -> None:
-    """Conditional nested recursion."""
+    """Conditional nested recursion.
+
+    Identical semantics to condlinrec - both use the same underlying algorithm.
+    Each [Ci] is [[B] [T]] or [[B] [R1] [R2] ...].
+    Tests each B. If true and just [T], executes T and exits.
+    If true and [R1] [R2] ..., executes R1, recurses, executes R2, recurses, ...
+    Last clause [D] is default: [[T]] or [[R1] [R2] ...] (no condition).
+    """
     clauses = ctx.stack.pop()
     clause_list = _get_aggregate(clauses, "condnestrec")
+
+    if not clause_list:
+        return
 
     def condnestrec_aux() -> None:
         saved = ctx.stack._items.copy()
 
-        for clause in clause_list:
-            if not isinstance(clause, JoyValue) or clause.type != JoyType.QUOTATION:
+        # Test all clauses except last (which is default)
+        matched = False
+        matched_idx = len(clause_list) - 1  # Default to last
+
+        for i in range(len(clause_list) - 1):
+            clause = clause_list[i]
+            clause_terms = _get_clause_terms(clause)
+            if clause_terms is None or len(clause_terms) < 2:
                 continue
 
-            clause_terms = clause.value.terms
-            if len(clause_terms) < 1:
-                continue
-
-            if len(clause_terms) == 1:
-                ctx.stack._items = saved.copy()
-                term = clause_terms[0]
-                if isinstance(term, JoyValue) and term.type == JoyType.QUOTATION:
-                    ctx.evaluator.execute(term.value)
-                elif isinstance(term, JoyQuotation):
-                    ctx.evaluator.execute(term)
-                elif isinstance(term, str):
-                    if term == "condnestrec":
-                        condnestrec_aux()
-                    else:
-                        ctx.evaluator._execute_symbol(term)
-                return
-
-            condition = clause_terms[0]
-            body = clause_terms[1]
-
+            # Test condition B (first element)
             ctx.stack._items = saved.copy()
-            if isinstance(condition, JoyValue) and condition.type == JoyType.QUOTATION:
-                ctx.evaluator.execute(condition.value)
-            elif isinstance(condition, JoyQuotation):
-                ctx.evaluator.execute(condition)
-            elif isinstance(condition, str):
-                ctx.evaluator._execute_symbol(condition)
-            else:
-                ctx.stack.push_value(condition)
+            condition = clause_terms[0]
+            _execute_quotation_or_term(ctx, condition)
 
             test_result = ctx.stack.pop()
-
             if _is_truthy(test_result):
-                ctx.stack._items = saved.copy()
-                _execute_body_with_recursion(body, condnestrec_aux)
-                return
+                matched = True
+                matched_idx = i
+                break
 
+        # Restore stack
         ctx.stack._items = saved
 
-    def _execute_body_with_recursion(body, recurse_fn):
-        if isinstance(body, JoyValue) and body.type == JoyType.QUOTATION:
-            _execute_terms_with_recursion(body.value.terms, recurse_fn)
-        elif isinstance(body, JoyQuotation):
-            _execute_terms_with_recursion(body.terms, recurse_fn)
-        elif isinstance(body, str):
-            if body == "condnestrec":
-                recurse_fn()
-            else:
-                ctx.evaluator._execute_symbol(body)
+        # Get clause to execute
+        clause = clause_list[matched_idx]
+        clause_terms = _get_clause_terms(clause)
+        if clause_terms is None:
+            return
 
-    def _execute_terms_with_recursion(terms, recurse_fn):
-        for term in terms:
-            if isinstance(term, str) and term == "condnestrec":
-                recurse_fn()
-            elif isinstance(term, JoyValue):
-                ctx.evaluator._execute_term(term)
-            elif isinstance(term, JoyQuotation):
-                ctx.stack.push_value(JoyValue.quotation(term))
-            else:
-                ctx.evaluator._execute_term(term)
+        # Determine parts to execute:
+        # If matched: skip B (element 0), use elements 1+ as [T] or [R1 R2...]
+        # If default: use all elements as [T] or [R1 R2...]
+        start_idx = 1 if matched else 0
+        parts = clause_terms[start_idx:]
+
+        if not parts:
+            return
+
+        # Execute first part
+        _execute_quotation_or_term(ctx, parts[0])
+
+        # For each subsequent part: recurse, then execute
+        for j in range(1, len(parts)):
+            condnestrec_aux()
+            _execute_quotation_or_term(ctx, parts[j])
 
     condnestrec_aux()
 
@@ -1333,18 +1327,28 @@ def condnestrec(ctx: ExecutionContext) -> None:
 
 @joy_word(name="treestep", params=2, doc="T [P] -> ...")
 def treestep(ctx: ExecutionContext) -> None:
-    """Tree step: apply P to each node."""
+    """Tree step: apply P to each leaf node in tree."""
     quot, tree = ctx.stack.pop_n(2)
     q = expect_quotation(quot, "treestep")
 
-    def step_tree(node: JoyValue) -> None:
-        if node.type in (JoyType.LIST, JoyType.QUOTATION):
-            items = node.value if node.type == JoyType.LIST else node.value.terms
-            for item in items:
-                if isinstance(item, JoyValue):
+    def step_tree(node) -> None:
+        # Handle JoyQuotation (nested tree structure)
+        if isinstance(node, JoyQuotation):
+            for item in node.terms:
+                step_tree(item)
+        # Handle JoyValue
+        elif isinstance(node, JoyValue):
+            if node.type in (JoyType.LIST, JoyType.QUOTATION):
+                items = node.value if node.type == JoyType.LIST else node.value.terms
+                for item in items:
                     step_tree(item)
+            else:
+                # Leaf node - push and execute P
+                ctx.stack.push_value(node)
+                ctx.evaluator.execute(q)
         else:
-            ctx.stack.push_value(node)
+            # Raw value (in pythonic mode) - treat as leaf
+            ctx.stack.push(node)
             ctx.evaluator.execute(q)
 
     step_tree(tree)

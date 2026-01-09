@@ -31,6 +31,11 @@ Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support 
 
 ### Fixed
 
+- `app11` combinator: Fixed to clear stack before applying quotation to X and Y
+- `treestep` combinator: Fixed to handle JoyQuotation objects in tree structure
+- `condlinrec`/`condnestrec` combinators: Fixed clause handling for JoyQuotation types
+  - Both now properly extract terms from raw JoyQuotation objects
+  - Unified implementation matches C runtime's shared `condnestrecaux` function
 - `=` equality: Float/SET comparison now uses IEEE 754 bit representation
   - `1.0 {0 48 49 50 51 52 62} =` correctly compares float bits to set bits
 - `linrec`: Converted from recursive to iterative implementation
@@ -91,7 +96,7 @@ Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support 
 
 ### Coverage
 
-- Python interpreter: 194/215 Joy tests passing (90.2%)
+- Python interpreter: 198/215 Joy tests passing (92.1%)
 - C backend: 199/215 Joy tests passing (92.6%)
 - pytest: 712/712 unit tests passing (100%)
 
