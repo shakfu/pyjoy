@@ -6,7 +6,7 @@ Tests the following:
 - wrap_value helper function
 - get_numeric helper function
 - make_numeric_result helper function
-- pythonic_word decorator
+- python_word decorator
 - Primitives working in both strict and pythonic modes
 """
 
@@ -17,7 +17,7 @@ from pyjoy.evaluator.core import (
     get_numeric,
     is_joy_value,
     make_numeric_result,
-    pythonic_word,
+    python_word,
     unwrap_value,
     wrap_value,
 )
@@ -172,13 +172,13 @@ class TestIsJoyValue:
         assert is_joy_value([1, 2, 3]) is False
 
 
-class TestPythonicWordDecorator:
-    """Tests for @pythonic_word decorator."""
+class TestPythonWordDecorator:
+    """Tests for @python_word decorator."""
 
     def test_simple_add_strict(self):
         """Simple add function works in strict mode."""
 
-        @pythonic_word(name="test_add")
+        @python_word(name="test_add")
         def test_add(a, b):
             return a + b
 
@@ -195,7 +195,7 @@ class TestPythonicWordDecorator:
     def test_simple_add_pythonic(self):
         """Simple add function works in pythonic mode."""
 
-        @pythonic_word(name="test_add2")
+        @python_word(name="test_add2")
         def test_add2(a, b):
             return a + b
 
@@ -212,7 +212,7 @@ class TestPythonicWordDecorator:
     def test_single_arg_function(self):
         """Single argument function works."""
 
-        @pythonic_word(name="test_double")
+        @python_word(name="test_double")
         def test_double(x):
             return x * 2
 
@@ -227,7 +227,7 @@ class TestPythonicWordDecorator:
     def test_no_arg_function(self):
         """Zero argument function works."""
 
-        @pythonic_word(name="test_const")
+        @python_word(name="test_const")
         def test_const():
             return 42
 
@@ -241,7 +241,7 @@ class TestPythonicWordDecorator:
     def test_none_result_not_pushed(self):
         """None result is not pushed."""
 
-        @pythonic_word(name="test_none")
+        @python_word(name="test_none")
         def test_none(x):
             return None
 
@@ -257,7 +257,7 @@ class TestPythonicWordDecorator:
     def test_three_arg_function(self):
         """Three argument function works."""
 
-        @pythonic_word(name="test_ternary")
+        @python_word(name="test_ternary")
         def test_ternary(a, b, c):
             return a + b + c
 
@@ -275,7 +275,7 @@ class TestPythonicWordDecorator:
         """Stack underflow raises appropriate error."""
         from pyjoy.errors import JoyStackUnderflow
 
-        @pythonic_word(name="test_underflow")
+        @python_word(name="test_underflow")
         def test_underflow(a, b):
             return a + b
 
@@ -288,7 +288,7 @@ class TestPythonicWordDecorator:
     def test_string_concatenation(self):
         """Works with string operations."""
 
-        @pythonic_word(name="test_concat")
+        @python_word(name="test_concat")
         def test_concat(a, b):
             return str(a) + str(b)
 

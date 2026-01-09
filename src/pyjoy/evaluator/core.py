@@ -2,11 +2,33 @@
 pyjoy.evaluator.core - Core evaluator infrastructure.
 
 Contains:
-- joy_word decorator for defining primitives
-- pythonic_word decorator for simple auto-pop/push primitives
+- joy_word decorator for defining primitives (full stack control)
+- python_word decorator for simple auto-pop/push primitives
 - Evaluator class for executing Joy programs
 - Primitive registry functions
 - Mode-aware value extraction helpers
+
+Decorator Comparison:
+
+    @joy_word(name="+", params=2, doc="N1 N2 -> N3")
+    def plus(ctx: ExecutionContext):
+        b, a = ctx.stack.pop_n(2)
+        ctx.stack.push_value(JoyValue.integer(a.value + b.value))
+
+    @python_word(name="+", doc="N1 N2 -> N3")
+    def plus(a, b):
+        return a + b
+
+Use @joy_word when you need:
+  - Direct stack access (e.g., for combinators)
+  - Multiple results pushed to stack
+  - Complex control flow
+  - Access to ExecutionContext for mode checking
+
+Use @python_word when you have:
+  - Pure functions with fixed arity
+  - Single return value (or None)
+  - Simple value transformations
 """
 
 from __future__ import annotations
@@ -181,14 +203,14 @@ def joy_word(
     return decorator
 
 
-def pythonic_word(
+def python_word(
     name: Optional[str] = None,
     doc: Optional[str] = None,
 ) -> Callable[[Callable[..., Any]], WordFunc]:
     """
-    Decorator for simple auto-pop/push primitives (pyjoy2 style).
+    Decorator for simple auto-pop/push primitives.
 
-    The decorated function receives raw values (unwrapped from JoyValue)
+    The decorated function receives raw Python values (unwrapped from JoyValue)
     and returns a raw result that is automatically wrapped and pushed.
 
     Works in both strict and pythonic modes:
@@ -196,18 +218,18 @@ def pythonic_word(
     - Pythonic mode: uses raw values throughout
 
     This is simpler than @joy_word for pure functions that don't need
-    direct stack manipulation.
+    direct stack manipulation or ExecutionContext access.
 
     Args:
         name: Joy word name (defaults to function name)
         doc: Documentation string
 
     Example:
-        @pythonic_word(name="+", doc="N1 N2 -> N3")
+        @python_word(name="+", doc="N1 N2 -> N3")
         def add(a, b):
             return a + b
 
-        # Usage: 3 4 add -> 7
+        # Usage: 3 4 + -> 7
     """
 
     def decorator(func: Callable[..., Any]) -> WordFunc:
@@ -291,7 +313,7 @@ def pythonic_word(
         wrapper.joy_word = word_name  # type: ignore[attr-defined]
         wrapper.joy_params = n_params  # type: ignore[attr-defined]
         wrapper.joy_doc = doc or func.__doc__  # type: ignore[attr-defined]
-        wrapper._is_pythonic = True  # type: ignore[attr-defined]
+        wrapper._is_python_word = True  # type: ignore[attr-defined]
 
         # Register in global primitives
         _primitives[word_name] = wrapper

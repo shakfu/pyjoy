@@ -7,7 +7,7 @@ Public API:
     - Evaluator: Main evaluator class for executing Joy programs
     - ExecutionContext: Execution state (stack + evaluator reference)
     - joy_word: Decorator for defining Joy primitives (full control)
-    - pythonic_word: Decorator for simple auto-pop/push primitives
+    - python_word: Decorator for simple auto-pop/push primitives
     - get_primitive: Look up a primitive by name
     - register_primitive: Register a primitive function
     - list_primitives: List all registered primitive names
@@ -50,7 +50,7 @@ from .core import (
     joy_word,
     list_primitives,
     make_numeric_result,
-    pythonic_word,
+    python_word,
     register_primitive,
     unwrap_value,
     wrap_value,
@@ -63,7 +63,7 @@ __all__ = [
     "WordFunc",
     # Decorators
     "joy_word",
-    "pythonic_word",
+    "python_word",
     # Registry functions
     "get_primitive",
     "register_primitive",
