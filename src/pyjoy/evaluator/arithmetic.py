@@ -14,31 +14,25 @@ from pyjoy.errors import JoyDivisionByZero, JoyTypeError
 from pyjoy.stack import ExecutionContext
 from pyjoy.types import JoyType, JoyValue
 
-from .core import joy_word
+from .core import get_numeric, joy_word, make_numeric_result
 
 
-def _numeric_value(v: JoyValue) -> int | float:
-    """Extract numeric value, converting if needed."""
-    if v.type == JoyType.INTEGER:
-        return v.value
-    elif v.type == JoyType.FLOAT:
-        return v.value
-    elif v.type == JoyType.CHAR:
-        return ord(v.value)
-    elif v.type == JoyType.BOOLEAN:
-        return 1 if v.value else 0
-    else:
-        raise JoyTypeError("arithmetic", "numeric", v.type.name)
+def _numeric_value(v) -> int | float:
+    """Extract numeric value, converting if needed.
+
+    Mode-aware: handles both JoyValue and raw Python values.
+    """
+    return get_numeric(v)
 
 
-def _make_numeric(value: int | float) -> JoyValue:
-    """Create JoyValue from numeric result, preserving int when possible."""
-    if isinstance(value, float) and value.is_integer():
-        return JoyValue.integer(int(value))
-    elif isinstance(value, float):
-        return JoyValue.floating(value)
-    else:
-        return JoyValue.integer(value)
+def _make_numeric(value: int | float, ctx: ExecutionContext | None = None) -> JoyValue:
+    """Create JoyValue from numeric result, preserving int when possible.
+
+    Note: In strict mode, always returns JoyValue for backward compatibility.
+    """
+    # Default to strict mode for backward compatibility
+    strict = True if ctx is None else ctx.strict
+    return make_numeric_result(value, strict=strict)
 
 
 # -----------------------------------------------------------------------------

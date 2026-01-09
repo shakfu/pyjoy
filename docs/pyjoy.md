@@ -920,6 +920,7 @@ class Parser:
 ## 7. Implementation Phases
 
 ### Phase 1: Core Infrastructure (Week 1)
+
 - [ ] Type system (`types.py`)
 - [ ] Stack implementation (`stack.py`)
 - [ ] Scanner (`scanner.py`)
@@ -927,6 +928,7 @@ class Parser:
 - [ ] Evaluator skeleton (`evaluator.py`)
 
 ### Phase 2: Basic Primitives (Week 2)
+
 - [ ] Stack operations: `dup`, `swap`, `pop`, `over`, `rotate`
 - [ ] Arithmetic: `+`, `-`, `*`, `/`, `rem`
 - [ ] Comparison: `<`, `>`, `<=`, `>=`, `=`, `!=`
@@ -934,12 +936,14 @@ class Parser:
 - [ ] List basics: `cons`, `first`, `rest`, `null`, `size`
 
 ### Phase 3: Higher-Order Operations (Week 3)
+
 - [ ] Execution: `i`, `x`, `dip`
 - [ ] Conditionals: `ifte`, `branch`, `choice`
 - [ ] Iteration: `map`, `filter`, `fold`, `step`
 - [ ] Looping: `while`, `times`
 
 ### Phase 4: Recursion Combinators (Week 4)
+
 - [ ] `linrec` (linear recursion)
 - [ ] `binrec` (binary recursion)
 - [ ] `genrec` (general recursion)
@@ -947,18 +951,21 @@ class Parser:
 - [ ] `tailrec` (tail recursion)
 
 ### Phase 5: I/O and System (Week 5)
+
 - [ ] Output: `put`, `putch`, `putchars`
 - [ ] Input: `get`, `getch`
 - [ ] Files: `fopen`, `fclose`, `fread`, `fwrite`
 - [ ] System: `include`, `quit`, `abort`
 
 ### Phase 6: Module System (Week 6)
+
 - [ ] Definitions: `DEFINE`, `==`
 - [ ] Modules: `MODULE`, `END`
 - [ ] Visibility: `HIDE`, `PRIVATE`, `PUBLIC`
 - [ ] Constants: `CONST`
 
 ### Phase 7: Standard Library (Week 7-8)
+
 - [ ] Port Joy library files from `lib/`
 - [ ] Test compatibility with C implementation
 - [ ] Documentation
@@ -970,6 +977,7 @@ class Parser:
 ### 8.1 Why Tuples for Lists?
 
 Joy lists are immutable (functional semantics). Python tuples:
+
 - Are immutable (matches Joy semantics)
 - Have O(1) indexing (unlike linked lists)
 - Are hashable (can be used in sets/dicts)
@@ -994,6 +1002,7 @@ class Cons:
 ### 8.2 Why Decorators for Primitives?
 
 Decorators provide:
+
 - Declarative style (self-documenting)
 - Automatic registration
 - Validation injection (params, types)
@@ -1202,6 +1211,7 @@ Key challenges to address:
 4. **Memory:** Python objects have more overhead than C structs
 
 The design prioritizes clarity and extensibility over raw performance, making PyJoy suitable for:
+
 - Learning Joy language
 - Rapid prototyping
 - Embedding in Python applications

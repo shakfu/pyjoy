@@ -2,7 +2,35 @@
 
 ## [Unreleased]
 
+### Added - Dual-Mode Architecture
+
+Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support both strict Joy compliance and Pythonic interoperability in a single codebase.
+
+**Python Interop Syntax** (enabled with `strict=False`):
+- Backtick expressions: `` `2 + 3` `` evaluates Python and pushes result
+- Dollar expressions: `$(math.sqrt(16))` same as backticks, supports nested parens
+- Bang statements: `!import sys` executes Python without pushing to stack
+
+**Pre-imported Python Modules** (pythonic mode):
+- `math`, `json`, `os`, `sys`, `re`, `itertools`, `functools`, `collections`
+
+**Namespace Access** (pythonic mode):
+- `stack` / `S` - direct stack access from Python expressions
+- `ctx` - ExecutionContext for advanced manipulation
+- `evaluator` - full evaluator access
+
+**Mode-Aware Primitives**:
+- All comparison operators work with both JoyValue and raw Python values
+- Type predicates (`integer`, `float`, `list`, etc.) handle both modes
+- Boolean operations return appropriate types per mode
+
+**New Test Infrastructure**:
+- `tests/test_dual_mode.py` - 182 parameterized tests running in both modes
+- `tests/test_python_interop.py` - 34 tests for Python interop features
+- `tests/test_pythonic_mode.py` - 26 tests for pythonic mode specifics
+
 ### Fixed
+
 - `=` equality: Float/SET comparison now uses IEEE 754 bit representation
   - `1.0 {0 48 49 50 51 52 62} =` correctly compares float bits to set bits
 - `linrec`: Converted from recursive to iterative implementation
@@ -36,6 +64,7 @@
 - `construct`: Fixed to push individual results instead of a list
 
 ### Added
+
 - `filetime`: Get file modification time as epoch integer (returns empty list if missing)
 - `finclude`: Include and execute Joy file at runtime (silent no-op if file missing)
 - `id`: Identity function (no-op)
@@ -53,6 +82,7 @@
 - C test build structure: Each Joy file compiles to `build/<stem>/`
 
 ### Changed
+
 - `condlinrec`/`condnestrec`: Rewrote to match Joy reference implementation
   - Last clause is now treated as default (no B condition testing)
   - Both combinators share `condnestrecaux` implementation
@@ -60,21 +90,24 @@
 - Standard library loading: `inilib.joy` loaded first, then `agglib.joy`
 
 ### Coverage
+
 - Python interpreter: 194/215 Joy tests passing (90.2%)
 - C backend: 199/215 Joy tests passing (92.6%)
-- pytest: 430/430 unit tests passing (100%)
+- pytest: 712/712 unit tests passing (100%)
 
 ---
 
 ## [Previous]
 
 ### Fixed
+
 - `not`: Now returns bitwise complement for SETs (was always returning boolean)
 - `and`/`or`: Now perform set intersection/union for SET operands
 - `cons`: Now supports adding elements to SETs
 - `infra`: Now accepts both LIST and QUOTATION arguments
 
 ### Added
+
 - `id`: Identity function (does nothing)
 - `choice`: B T F -> X (if B then T else F)
 - `xor`: Logical XOR / set symmetric difference
@@ -122,4 +155,5 @@
 - Constants: `maxint`
 
 ### Tests
+
 - jp-nestrec.joy runs to completion with all tests passing

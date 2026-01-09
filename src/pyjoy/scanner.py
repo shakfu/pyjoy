@@ -2,6 +2,11 @@
 pyjoy.scanner - Lexical analysis for Joy programs.
 
 Tokenizes Joy source code into a stream of tokens.
+
+Supports Python interop syntax (strict=False mode only):
+- `expr` : Backtick Python expression (evaluates and pushes result)
+- $(expr): Dollar syntax for Python expressions
+- !stmt  : Bang statement (executes Python, no push)
 """
 
 from __future__ import annotations
@@ -27,12 +32,23 @@ class Scanner:
     Joy lexical analyzer.
 
     Converts source code into a stream of tokens.
+
+    When python_interop=True, also recognizes:
+    - PYTHON_EXPR: `expression` (backtick syntax)
+    - PYTHON_DOLLAR: $(expression) (dollar syntax)
+    - PYTHON_STMT: !statement (bang statement, rest of line)
     """
 
     # Token patterns in order of precedence
+    # Python interop patterns are at the top for priority
     PATTERNS = [
         ("COMMENT", r"\(\*.*?\*\)"),  # (* comment *)
         ("COMMENT2", r"#[^\n]*"),  # # line comment
+        # Python interop (must come before other patterns)
+        ("PYTHON_EXPR", r"`[^`]*`"),  # `python expression`
+        # $(python expression) with nested parens
+        ("PYTHON_DOLLAR", r"\$\((?:[^()]*|\([^()]*\))*\)"),
+        ("PYTHON_STMT", r"!(?!=)[^\n]*"),  # !stmt (not !=)
         ("FLOAT", r"-?\d+\.\d+(?:[eE][+-]?\d+)?"),  # 3.14, -2.5e10
         ("INTEGER", r"-?\d+"),  # 42, -17
         ("STRING", r'"(?:[^"\\]|\\.)*"'),  # "hello"
@@ -61,12 +77,20 @@ class Scanner:
         # Also allow -name pattern for symbols like -inf
         (
             "SYMBOL",
-            r"[a-zA-Z_][a-zA-Z0-9_\-]*|-[a-zA-Z_][a-zA-Z0-9_\-]*|[+\-*/<=>&|!?@#$%^~:]+",
+            r"[a-zA-Z_][a-zA-Z0-9_\-]*|-[a-zA-Z_][a-zA-Z0-9_\-]*|[+\-*/<=>&|?@#%^~:!]+",
         ),  # noqa: E501
         ("WHITESPACE", r"\s+"),  # whitespace
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, python_interop: bool = False) -> None:
+        """
+        Initialize the scanner.
+
+        Args:
+            python_interop: If True, recognize Python interop tokens.
+                           If False (default), treat them as regular symbols/errors.
+        """
+        self.python_interop = python_interop
         # Compile the combined regex pattern
         pattern = "|".join(f"(?P<{name}>{pat})" for name, pat in self.PATTERNS)
         self._regex = re.compile(pattern, re.DOTALL)
@@ -86,6 +110,9 @@ class Scanner:
 
         Skips whitespace and comments.
         Shell escape lines (starting with $) are executed and removed.
+
+        Python interop tokens (backticks, $(), !) are only yielded when
+        python_interop=True was set in __init__.
         """
         # Pre-process shell escape lines
         source = self._process_shell_escapes(source, execute_shell)
@@ -112,8 +139,27 @@ class Scanner:
 
             assert kind is not None
 
+            # Handle Python interop tokens
+            if kind == "PYTHON_EXPR":
+                if not self.python_interop:
+                    # Skip in strict mode - this will cause a parse error
+                    # which is the desired behavior
+                    continue
+                # Extract expression from backticks: `expr` -> expr
+                value = value[1:-1]
+            elif kind == "PYTHON_DOLLAR":
+                if not self.python_interop:
+                    continue
+                # Extract expression from $(expr) -> expr
+                value = value[2:-1]
+            elif kind == "PYTHON_STMT":
+                if not self.python_interop:
+                    continue
+                # Extract statement from !stmt -> stmt (strip leading !)
+                value = value[1:].strip()
+
             # Convert token values
-            if kind == "INTEGER":
+            elif kind == "INTEGER":
                 value = int(value)
             elif kind == "FLOAT":
                 value = float(value)
@@ -158,6 +204,8 @@ class Scanner:
         In Joy, a line starting with $ at column 0 executes the rest
         of the line as a shell command and is not part of the program.
 
+        Exception: $(expr) is Python interop syntax, not shell escape.
+
         Args:
             source: Joy source code
             execute: If True, actually execute shell commands
@@ -169,7 +217,8 @@ class Scanner:
         result_lines = []
 
         for line in lines:
-            if line.startswith("$"):
+            # Shell escape: $ at start of line, but NOT $( which is Python interop
+            if line.startswith("$") and not line.startswith("$("):
                 # Shell escape: execute the command (everything after $)
                 if execute:
                     cmd = line[1:].strip()
@@ -184,15 +233,16 @@ class Scanner:
 
 
 # Convenience function for one-shot tokenization
-def tokenize(source: str) -> Iterator[Token]:
+def tokenize(source: str, python_interop: bool = False) -> Iterator[Token]:
     """
     Tokenize Joy source code.
 
     Args:
         source: Joy source code
+        python_interop: If True, recognize Python interop tokens
 
     Yields:
         Token objects
     """
-    scanner = Scanner()
+    scanner = Scanner(python_interop=python_interop)
     return scanner.tokenize(source)

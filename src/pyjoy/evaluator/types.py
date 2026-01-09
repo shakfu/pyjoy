@@ -10,99 +10,195 @@ iflist, iffloat, iffile
 
 from __future__ import annotations
 
+from typing import Any
+
 from pyjoy.errors import JoyTypeError
 from pyjoy.stack import ExecutionContext
-from pyjoy.types import JoyType, JoyValue
+from pyjoy.types import JoyQuotation, JoyType, JoyValue
 
-from .core import expect_quotation, get_primitive, joy_word
+from .core import expect_quotation, get_primitive, is_joy_value, joy_word
+
+
+def _push_boolean(ctx: ExecutionContext, result: bool) -> None:
+    """Push a boolean result in a mode-appropriate way."""
+    if ctx.strict:
+        ctx.stack.push_value(JoyValue.boolean(result))
+    else:
+        ctx.stack.push(result)
+
+
+def _push_integer(ctx: ExecutionContext, result: int) -> None:
+    """Push an integer result in a mode-appropriate way."""
+    if ctx.strict:
+        ctx.stack.push_value(JoyValue.integer(result))
+    else:
+        ctx.stack.push(result)
 
 # -----------------------------------------------------------------------------
 # Type Predicates
 # -----------------------------------------------------------------------------
 
 
+def _check_type(x: Any, joy_type: JoyType, python_types: tuple) -> bool:
+    """Check if x matches the given Joy type or Python types."""
+    if is_joy_value(x):
+        return x.type == joy_type
+    return isinstance(x, python_types)
+
+
 @joy_word(name="integer", params=1, doc="X -> B")
 def is_integer(ctx: ExecutionContext) -> None:
     """Test if X is an integer."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.INTEGER))
+    if is_joy_value(x):
+        result = x.type == JoyType.INTEGER
+    else:
+        result = isinstance(x, int) and not isinstance(x, bool)
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="float", params=1, doc="X -> B")
 def is_float(ctx: ExecutionContext) -> None:
     """Test if X is a float."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.FLOAT))
+    if is_joy_value(x):
+        result = x.type == JoyType.FLOAT
+    else:
+        result = isinstance(x, float)
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="char", params=1, doc="X -> B")
 def is_char(ctx: ExecutionContext) -> None:
     """Test if X is a character."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.CHAR))
+    if is_joy_value(x):
+        result = x.type == JoyType.CHAR
+    else:
+        # In pythonic mode, a single-character string is a char
+        result = isinstance(x, str) and len(x) == 1
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="string", params=1, doc="X -> B")
 def is_string(ctx: ExecutionContext) -> None:
     """Test if X is a string."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.STRING))
+    if is_joy_value(x):
+        result = x.type == JoyType.STRING
+    else:
+        # In pythonic mode, multi-char strings are strings (not chars)
+        result = isinstance(x, str) and len(x) != 1
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="list", params=1, doc="X -> B")
 def is_list(ctx: ExecutionContext) -> None:
     """Test if X is a list (or quotation, treated as list in Joy)."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(
-        JoyValue.boolean(x.type in (JoyType.LIST, JoyType.QUOTATION))
-    )
+    if is_joy_value(x):
+        result = x.type in (JoyType.LIST, JoyType.QUOTATION)
+    else:
+        result = isinstance(x, (list, tuple, JoyQuotation))
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="logical", params=1, doc="X -> B")
 def is_logical(ctx: ExecutionContext) -> None:
     """Test if X is a boolean."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.BOOLEAN))
+    if is_joy_value(x):
+        result = x.type == JoyType.BOOLEAN
+    else:
+        result = isinstance(x, bool)
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="set", params=1, doc="X -> B")
 def is_set(ctx: ExecutionContext) -> None:
     """Test if X is a set."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.SET))
+    if is_joy_value(x):
+        result = x.type == JoyType.SET
+    else:
+        result = isinstance(x, frozenset)
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="leaf", params=1, doc="X -> B")
 def is_leaf(ctx: ExecutionContext) -> None:
     """Test if X is an atom (not a list or quotation)."""
     x = ctx.stack.pop()
-    is_aggregate = x.type in (JoyType.LIST, JoyType.QUOTATION)
-    ctx.stack.push_value(JoyValue.boolean(not is_aggregate))
+    if is_joy_value(x):
+        is_aggregate = x.type in (JoyType.LIST, JoyType.QUOTATION)
+    else:
+        is_aggregate = isinstance(x, (list, tuple, JoyQuotation))
+    _push_boolean(ctx, not is_aggregate)
 
 
 @joy_word(name="file", params=1, doc="X -> B")
 def is_file(ctx: ExecutionContext) -> None:
     """Test if X is a file handle."""
     x = ctx.stack.pop()
-    ctx.stack.push_value(JoyValue.boolean(x.type == JoyType.FILE))
+    if is_joy_value(x):
+        result = x.type == JoyType.FILE
+    else:
+        # In pythonic mode, check for file-like object
+        result = hasattr(x, 'read') and hasattr(x, 'write')
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="user", params=1, doc="X -> B")
 def is_user(ctx: ExecutionContext) -> None:
     """Test if X is a user-defined symbol."""
     x = ctx.stack.pop()
-    if x.type != JoyType.SYMBOL:
-        ctx.stack.push_value(JoyValue.boolean(False))
+    if is_joy_value(x):
+        if x.type != JoyType.SYMBOL:
+            _push_boolean(ctx, False)
+        else:
+            is_defined = x.value in ctx.evaluator.definitions
+            _push_boolean(ctx, is_defined)
     else:
-        is_defined = x.value in ctx.evaluator.definitions
-        ctx.stack.push_value(JoyValue.boolean(is_defined))
+        # In pythonic mode, symbols are just strings
+        if isinstance(x, str):
+            is_defined = x in ctx.evaluator.definitions
+            _push_boolean(ctx, is_defined)
+        else:
+            _push_boolean(ctx, False)
+
+
+def _get_type_key(x: Any) -> str:
+    """Get a type key for comparison purposes."""
+    if is_joy_value(x):
+        return x.type.name
+    if isinstance(x, bool):
+        return "BOOLEAN"
+    if isinstance(x, int):
+        return "INTEGER"
+    if isinstance(x, float):
+        return "FLOAT"
+    if isinstance(x, str):
+        if len(x) == 1:
+            return "CHAR"
+        return "STRING"
+    if isinstance(x, (list, tuple)):
+        return "LIST"
+    if isinstance(x, JoyQuotation):
+        return "QUOTATION"
+    if isinstance(x, frozenset):
+        return "SET"
+    return "OBJECT"
 
 
 @joy_word(name="sametype", params=2, doc="X Y -> B")
 def sametype(ctx: ExecutionContext) -> None:
     """Test if X and Y have the same type."""
     b, a = ctx.stack.pop_n(2)
-    ctx.stack.push_value(JoyValue.boolean(a.type == b.type))
+    if is_joy_value(a) and is_joy_value(b):
+        result = a.type == b.type
+    else:
+        result = _get_type_key(a) == _get_type_key(b)
+    _push_boolean(ctx, result)
 
 
 @joy_word(name="typeof", params=1, doc="X -> I")
@@ -116,29 +212,53 @@ def typeof_(ctx: ExecutionContext) -> None:
     """
     x = ctx.stack.pop()
 
-    # For symbols, check if it's a builtin or user-defined
-    if x.type == JoyType.SYMBOL:
-        # Check if it's registered as a primitive
-        is_primitive = get_primitive(x.value) is not None
-        is_user_def = x.value in ctx.evaluator.definitions
-        if is_primitive and not is_user_def:
-            ctx.stack.push_value(JoyValue.integer(3))  # BUILTIN
-        else:
-            ctx.stack.push_value(JoyValue.integer(2))  # USRDEF
+    # Handle JoyValue objects
+    if is_joy_value(x):
+        # For symbols, check if it's a builtin or user-defined
+        if x.type == JoyType.SYMBOL:
+            # Check if it's registered as a primitive
+            is_primitive = get_primitive(x.value) is not None
+            is_user_def = x.value in ctx.evaluator.definitions
+            if is_primitive and not is_user_def:
+                _push_integer(ctx, 3)  # BUILTIN
+            else:
+                _push_integer(ctx, 2)  # USRDEF
+            return
+
+        type_codes = {
+            JoyType.BOOLEAN: 4,
+            JoyType.CHAR: 5,
+            JoyType.INTEGER: 6,
+            JoyType.SET: 7,
+            JoyType.STRING: 8,
+            JoyType.LIST: 9,
+            JoyType.QUOTATION: 9,  # Quotation treated as list
+            JoyType.FLOAT: 10,
+            JoyType.FILE: 11,
+        }
+        _push_integer(ctx, type_codes.get(x.type, 0))
         return
 
-    type_codes = {
-        JoyType.BOOLEAN: 4,
-        JoyType.CHAR: 5,
-        JoyType.INTEGER: 6,
-        JoyType.SET: 7,
-        JoyType.STRING: 8,
-        JoyType.LIST: 9,
-        JoyType.QUOTATION: 9,  # Quotation treated as list
-        JoyType.FLOAT: 10,
-        JoyType.FILE: 11,
-    }
-    ctx.stack.push_value(JoyValue.integer(type_codes.get(x.type, 0)))
+    # Handle raw Python values (pythonic mode)
+    if isinstance(x, bool):
+        _push_integer(ctx, 4)  # BOOLEAN
+    elif isinstance(x, int):
+        _push_integer(ctx, 6)  # INTEGER
+    elif isinstance(x, float):
+        _push_integer(ctx, 10)  # FLOAT
+    elif isinstance(x, str):
+        if len(x) == 1:
+            _push_integer(ctx, 5)  # CHAR
+        else:
+            _push_integer(ctx, 8)  # STRING
+    elif isinstance(x, (list, tuple, JoyQuotation)):
+        _push_integer(ctx, 9)  # LIST
+    elif isinstance(x, frozenset):
+        _push_integer(ctx, 7)  # SET
+    elif hasattr(x, 'read') and hasattr(x, 'write'):
+        _push_integer(ctx, 11)  # FILE
+    else:
+        _push_integer(ctx, 0)  # UNKNOWN
 
 
 @joy_word(name="casting", params=2, doc="X T -> Y")

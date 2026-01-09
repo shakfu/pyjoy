@@ -75,8 +75,8 @@ variable, then its lambda abstraction is generally written
 `x` which yields the result `(..x..)`\". The other construction is
 *application*, written in infix: if `f` is a function, then `f @ x` is
 the result of applying the function to `x`. Functions of several
-parameters are still a nuisance because one has to write `g @ ` and
-`h @ ` and so on. There is a useful device called currying, Generally
+parameters are still a nuisance because one has to write `g @` and
+`h @` and so on. There is a useful device called currying, Generally
 attributed to Curry, but freely acknowledged by him to be due to
 Sch\\\"{o}nfinkel (1924). The term \"Sch\\\"{o}nfinkeling\" never caught
 on. By currying all functions can be taken to be unary. The binary
@@ -85,7 +85,6 @@ it left-associative some parentheses can be saved. Furthermore, since it
 is the *only* binary operation, the `@` symbol is simply left out.
 
 The notation makes the expression
-
 
             +  2  3
 
@@ -192,7 +191,6 @@ more suitable to formal manipulation than the classical combinators.
 Consider a long expression, here again written explicitly with the
 application operator `@`. Note the need for parentheses.
 
-
         square @ (first @ (rest @ (reverse @ [1 2 3 4])))   -->  9
 
 All the functions are unary, and unary functions can be composed. The
@@ -200,12 +198,10 @@ composition of unary functions is again a unary function, and it can be
 applied like any other unary function. Let us write composition with an
 infix dot `"."`. The composition can be applied to the original list:
 
-
         (square . first . rest . reverse)  @  [1 2 3 4]     -->  9
 
 One might even introduce definitions in the style of the first line, and
 then write as in the second line:
-
 
         second = first . rest        second-last = second . reverse
         (square . second-last)  @  [1 2 3 4]                -->  9
@@ -225,7 +221,6 @@ expression still has to be applied to an argument, the list `[1 2 3 4]`.
 If we could elevate that list to the status of a function, we could
 eliminate application entirely from the expression and write
 
-
         square . first . rest . reverse . [1 2 3 4]         -->  9
 
 The numeral `9` would also need to denote a function. Can this be done?
@@ -233,7 +228,6 @@ The numeral `9` would also need to denote a function. Can this be done?
 Indeed it can be. We just let numerals and list constants denote
 functions which take a fixed dummy argument, written `?`, as argument
 and return a number or a list as value. So we should now write
-
 
       (square . first . rest . reverse . [1 2 3 4])  @  ?   -->   9 @ ?
 
@@ -283,7 +277,6 @@ many references. Compact \"pointfree\" definitions in the style of
 `second-last` above are used routinely, but many need additional
 operators, even application, for example (p 10):
 
-
         length  =  sum . listr one            where  one a  =  1
 
 Note the implicit application between `listr` and `one` and again
@@ -298,20 +291,17 @@ concepts are rather heavy artillery. Are there other ways? Consider
 again the runnning example. Written in plain prefix notation it needs no
 parentheses at all:
 
-
         square  first  rest  reverse  [1 2 3 4]             -->  9
 
 An expression with binary operators such as the infix expression
 `((6 - 4) * 3) + 2` is written in prefix notation also without
 parentheses as
 
-
             +     *     -     6     4     3     2           -->  8
 
 (Note in passing that the four consecutive numerals look suspiciously
 like a list of numbers.) We now have to make sense of the corresponding
 compositional notation
-
 
            (+  .  *  .  -  .  6  .  4  .  3  .  2)  @  ?    -->  8 @ ?
 
@@ -382,7 +372,6 @@ take such quotations as parameters.
 To add two integers, say 2 and 3, and to write their sum, you type the
 program
 
-
             2  3  +
 
 This is how it works internally: the first numeral causes the integer 2
@@ -407,7 +396,6 @@ multiplied by itself. Preferably this should be done without computing
 the sum twice. The following is a program to compute the square of the
 sum of 2 and 3:
 
-
             2  3  +  dup  *
 
 After the sum of 2 and 3 has been computed, the stack just contains the
@@ -423,7 +411,6 @@ the second reading of the ambiguous expression mentioned above.
 A list of integers is written inside square brackets. Just as integers
 can be added and otherwise manipulated, so lists can be manipulated in
 various ways. The following `concat`enates two lists:
-
 
             [1 2 3]  [4 5 6 7]  concat
 
@@ -449,7 +436,6 @@ they execute what they find on top of the stack, and this has to be the
 quotation of a program, enclosed in square brackets. One of these is a
 combinator for `map`ping elements of one list via a function to another
 list. Consider the program
-
 
             [1 2 3 4]  [dup *]  map
 
@@ -493,7 +479,6 @@ chosen because in most cases the three parts will be pushed just before
 `ifte` executes. For example, the following yields the absolute value of
 an integer, note the empty else-part.
 
-
             [0 <]  [0 swap -]  []  ifte
 
 Sometimes it is necessary to affect the elements just below the top
@@ -522,7 +507,6 @@ Definitions consist of a new symbol to be defined, then the `==` symbol,
 and then a program. After the first definition below, the symbol
 `square` can be used in place of ` dup * `.
 
-
             square   ==   dup  *
             size     ==   [pop 1]  map  sum
 
@@ -547,7 +531,6 @@ bundled form, either with `i` or with `app2`, or some other combinator.
 The following pieces of code, *without any definitions*, compute the
 factorial, the (naive) Fibonacci and quicksort. The four parts are here
 aligned to make comparisons easier.
-
 
       [null ] [succ] [dup pred        ] [i *                   ] genrec
       [small] [    ] [pred dup pred   ] [app2 +                ] genrec
@@ -578,7 +561,6 @@ all permutations of that sequence. For example, from sequences of 4
 elements such as the string `"abcd"`, the heterogeneous list
 `[foo 7 'A "hello"]` or the quotation `[[1 2 3] [dup *] map reverse]` it
 will produce the list of 24 permutation strings or lists or quotations.
-
 
     1               [ small ]
     2               [ unitlist ]
@@ -615,7 +597,6 @@ simply takes the *bodies* of the definitions and inserts them textually.
 The semantics of Joy can be expressed by two functions `EvP` and `Eva`,
 whose types are:
 
-
     EvP : PROGRAM * STACK  ->  STACK  (evaluate concatenated program)
     EvA :    ATOM * STACK  ->  STACK  (evaluate atomic program)
 
@@ -626,7 +607,6 @@ third elements are `F`, `S` and `T`, and whose remainder is `R`. The
 first two equations express that programs are evaluated sequentially
 from left to right.
 
-
     EvP( [] , S)  =  S
     EvP( [A | P] , S)  =  EvP( P , EvA(A, S))
 
@@ -634,7 +614,6 @@ The remaining equations concern atomic programs. This small selection is
 restricted to those literals, operators and combinators that were
 mentioned in the paper. The exposition also ignores the data types
 character, string and set.
-
 
     (Push literals:)
       EvA( numeral , S)  =  [number | S]  (e.g.  7  42  -123 )
@@ -739,7 +718,6 @@ of the program. The latter now has to be read as a sequence of
 instructions, or equivalently as denoting the composition of unary stack
 functions.
 
-
         1  a)                             2   3   +   4   *
            b)     2                       3   +   4   *
            c)     2   3                   +   4   *
@@ -774,7 +752,6 @@ below. Then that needs to be the only recursive definition.
 Alternatively it can be defined without recursion as in the second
 definition.
 
-
             y   ==  dup  [[y] cons]  dip  i
             y   ==  [dup cons]  swap  concat  dup  cons  i
 
@@ -784,7 +761,6 @@ the property that if it is ever executed by a combinator (such as `i`)
 it will first construct a replica of itself. Let `[P]` be a quoted
 program. Then the rewriting of the initial action of `y` looks like
 this:
-
 
     1       [P]  y
     2   ==  [P]  [dup cons]  swap  concat  dup  cons  i        (def y)
@@ -809,7 +785,6 @@ the extra `dip` which are needed to bypass the quotation constructed by
 line 9 above. The third definition is discussed below. In the three
 bodies the recursive step is initiated by `f1`, `i` and `x`
 respectively.
-
 
     f1  ==    [    null]  [    succ]  [ dup pred      f1 *]  ifte
     f2  ==  [ [pop null]  [pop succ]  [[dup pred] dip i  *]  ifte ]  y
@@ -858,7 +833,6 @@ says that the `size` of a `reverse`d list is the same as the `size` of
 the original list in Joy algebra. The second line gives the same
 equations *without variables* in Joy.
 
-
             2 * x  =  x + x                 size(reverse(x))  =  size(x)
             2  *   ==   dup  +              reverse  size   ==   size
 
@@ -870,7 +844,6 @@ relation `<` is the converse of the greater than relation `>`. Inserting
 a number with `cons` into a list of numbers and then taking the `sum` of
 that gives the same result as first taking the sum of the list and then
 adding the other number.
-
 
             succ  pred   ==   id            dup  and   ==   id
             <   ==   swap >                 cons  sum   ==   sum  +
@@ -885,7 +858,6 @@ multiplication distributes from the right over addition. Note that the
 program parameter for `app2` is first constructed from the multiplicand
 and `*`.
 
-
             [+]  dip  +   ==   +  +
             and  not   ==   [not]  app2  or
             concat  size   ==   [size]  app2  +
@@ -897,7 +869,6 @@ they are individually replaced by others before or after the reversal.
 Such structural functions are called natural transformations in category
 theory and polymorphic functions in computer science. This is how
 naturality laws are expressed in Joy:
-
 
           [reverse]  dip  map   ==   map  reverse
           [rest]  dip  map   ==   map  rest
@@ -912,7 +883,6 @@ operation which abstractly interchanges rows and columns.
 
 Such laws are proved by providing dummy parameters to both sides and
 showing that they reduce to the same result. For example
-
 
             M  [P]  [transpose]  dip  [map]  cons  map
             M  [P]  [map]  cons  map  transpose
@@ -940,7 +910,6 @@ same occurs in the Joy counterpart.
 Two Joy combinators are needed, `k` and `s`, defined in the semantics by
 the evaluation function `EvP` for atoms:
 
-
     EvA( k, [Y X | S])  =  EvP(Y, S)
     EvA( s, [F G X | S])  =  EvP(F,[X | T])  where EvP(G, [X | S]) = T
 
@@ -949,7 +918,6 @@ evaluation function `EvP` for programs, hence they will always be
 quotations. The required translation scheme is as in the first line
 below, where the primed variables represent the translations of their
 unprimed counterparts.
-
 
         K y   =>    ['y] k        S f g   =>    ['g] ['f] s
         K y x => 'x ['y] k        S f g x => 'x ['g] ['f] s
@@ -962,7 +930,6 @@ Since `x` is an argument, its translation `'x` has to push something
 onto the Joy stack.
 
 Alternatively, `s`, `k` and others may be variously defined from
-
 
      k == [pop ] dip i            s == cons2 b
      c == [swap] dip i        cons2 == [[dup] dip cons swap] dip cons
@@ -1051,8 +1018,6 @@ in response to Minsky\'s criticism of G\\\"{o}del for not inventing
 Lisp, he was tempted to say \'G\\\"{o}del *did* invent Lisp\'. But we
 should add in the same tone \'And McCarthy invented `quote`. And he saw
 that it *was* good\'. 
-
-
 
     J.W. Backus.
         Can programming be liberated from the von {N}eumann style? a

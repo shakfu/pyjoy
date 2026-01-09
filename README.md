@@ -1,6 +1,6 @@
 # pyjoy
 
-A Python implementation of Manfred von Thun's Joy programming language.
+A Python implementation of Manfred von Thun's Joy programming language with dual-mode architecture.
 
 The primary aim of this project is to [implement the Joy language in Python 3](docs/pyjoy.md). This means the implementation should run Joy programs without issue. A secondary aim is to have the Python implementation generate C code which can then be compiled into machine code. This is consistent with the late Manfred von Thun's wish:
 
@@ -11,7 +11,7 @@ The primary aim of this project is to [implement the Joy language in Python 3](d
 > and leave the generation of machine code to the C compiler. I would very much
 > welcome if somebody were to take up the task." [A Conversation with Manfred von Thun](https://www.nsl.com/papers/interview.htm)
 
-There's also a sister [pyjoy2](https://github.com/shakfu/pyjoy2) project which has the different aim of Pythonically re-imagining the Joy language, without adherence to the requirement of running existing Joy programs.
+This project now includes merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2), providing a **dual-mode architecture**: strict mode (`strict=True`) for Joy compliance, and pythonic mode (`strict=False`) for Python interoperability.
 
 ## Building
 
@@ -47,7 +47,8 @@ uv run pyjoy
 ```
 
 Example session:
-```
+
+```text
 Joy> 2 3 + .
 5
 Joy> [1 2 3] [dup *] map .
@@ -109,28 +110,17 @@ uv run pyjoy test tests/joy --compile
 ### Test Results
 
 | Backend | Passing | Total | Coverage |
-|---------|---------|-------|----------|
-| Python Interpreter | 171 | 215 | 79.5% |
+| ------- | ------- | ----- | -------- |
+| Python Interpreter | 194 | 215 | 90.2% |
 | C Backend | 199 | 215 | 92.6% |
-| pytest (unit tests) | 430 | 430 | 100% |
+| pytest (unit tests) | 712 | 712 | 100% |
 
 ### Primitives
 
 - **200+ primitives** implemented in both Python and C backends
 - Full support for Joy's core operations, combinators, and I/O
+- Mode-aware primitives work with both strict (JoyValue) and pythonic (raw Python) values
 - Some interpreter-specific primitives (`get`, `include`) have limited C support
-
-### Missing Primitives (7)
-
-| Primitive | Description |
-|-----------|-------------|
-| `$` | String format/interpolation |
-| `filetime` | File modification time |
-| `finclude` | Runtime file include |
-| `id` | Identity (push symbol) |
-| `setecho` | Set echo mode |
-| `setsize` | Set stack size |
-| `__memoryindex` | Memory index for gc |
 
 See [TODO.md](TODO.md) for detailed status and remaining work.
 
@@ -163,6 +153,39 @@ See [TODO.md](TODO.md) for detailed status and remaining work.
 - System: `system`, `getenv`, `argc`, `argv`
 - Time: `time`, `localtime`, `gmtime`, `mktime`, `strftime`
 
+### Python Interop (Pythonic Mode)
+
+When running with `strict=False`, Joy gains Python interoperability:
+
+```python
+from pyjoy import Evaluator
+
+ev = Evaluator(strict=False)  # Enable pythonic mode
+
+# Backtick expressions - evaluate Python and push result
+ev.run("`2 + 3`")           # Pushes 5
+ev.run("`math.sqrt(16)`")   # Pushes 4.0 (math is pre-imported)
+
+# Dollar expressions - same as backticks, better for nested parens
+ev.run("$(len([1,2,3]))")   # Pushes 3
+
+# Bang statements - execute Python without pushing
+ev.run("!x = 42")           # Sets x in Python namespace
+ev.run("`x * 2`")           # Pushes 84
+
+# Access stack from Python
+ev.run("1 2 3")
+ev.run("`sum(stack)`")      # Pushes 6
+
+# Define Python functions
+ev.run("!def square(n): return n * n")
+ev.run("`square(7)`")       # Pushes 49
+```
+
+**Pre-imported modules**: `math`, `json`, `os`, `sys`, `re`, `itertools`, `functools`, `collections`
+
+**Available in namespace**: `stack` (alias `S`), `ctx`, `evaluator`
+
 ### C Backend Features
 
 - Compiles Joy to standalone C executables
@@ -172,7 +195,7 @@ See [TODO.md](TODO.md) for detailed status and remaining work.
 
 ## Project Structure
 
-```
+```sh
 pyjoy/
   src/pyjoy/
     __init__.py         # Public API

@@ -10,11 +10,21 @@ unary2, unary3, unary4, opcase, treestep, treerec, treegenrec
 
 from __future__ import annotations
 
+from typing import Any
+
 from pyjoy.errors import JoyTypeError
 from pyjoy.stack import ExecutionContext
 from pyjoy.types import JoyQuotation, JoyType, JoyValue
 
-from .core import expect_quotation, joy_word
+from .core import expect_quotation, is_joy_value, joy_word
+
+
+def _is_truthy(v: Any) -> bool:
+    """Check if a value is truthy in a mode-agnostic way."""
+    if is_joy_value(v):
+        return v.is_truthy()
+    # Raw Python truthiness
+    return bool(v)
 
 
 def _term_to_value(term) -> JoyValue:
@@ -287,7 +297,7 @@ def ifte(ctx: ExecutionContext) -> None:
     test_result = ctx.stack.pop()
     ctx.stack._items = saved
 
-    if test_result.is_truthy():
+    if _is_truthy(test_result):
         ctx.evaluator.execute(t)
     else:
         ctx.evaluator.execute(f)
@@ -300,7 +310,7 @@ def branch(ctx: ExecutionContext) -> None:
     t = expect_quotation(t_quot, "branch")
     f = expect_quotation(f_quot, "branch")
 
-    if b.is_truthy():
+    if _is_truthy(b):
         ctx.evaluator.execute(t)
     else:
         ctx.evaluator.execute(f)
@@ -358,7 +368,7 @@ def cond(ctx: ExecutionContext) -> None:
 
         test_result = ctx.stack.pop()
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.stack._items = saved.copy()
             if body is not None:
                 if isinstance(body, JoyQuotation):
@@ -552,7 +562,7 @@ def filter_combinator(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             results.append(joy_item)
 
     # Preserve original aggregate type
@@ -576,7 +586,7 @@ def split(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             satisfies.append(joy_item)
         else:
             not_satisfies.append(joy_item)
@@ -629,7 +639,7 @@ def any_combinator(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.stack.push_value(JoyValue.boolean(True))
             return
 
@@ -655,7 +665,7 @@ def all_combinator(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if not test_result.is_truthy():
+        if not _is_truthy(test_result):
             ctx.stack.push_value(JoyValue.boolean(False))
             return
 
@@ -679,7 +689,7 @@ def some_combinator(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.stack.push_value(JoyValue.boolean(True))
             return
 
@@ -696,10 +706,17 @@ def times(ctx: ExecutionContext) -> None:
     """Execute P exactly N times."""
     quot, n = ctx.stack.pop_n(2)
     q = expect_quotation(quot, "times")
-    if n.type != JoyType.INTEGER:
-        raise JoyTypeError("times", "INTEGER", n.type.name)
 
-    count = n.value
+    # Handle both JoyValue and raw int
+    if is_joy_value(n):
+        if n.type != JoyType.INTEGER:
+            raise JoyTypeError("times", "INTEGER", n.type.name)
+        count = n.value
+    elif isinstance(n, int) and not isinstance(n, bool):
+        count = n
+    else:
+        raise JoyTypeError("times", "INTEGER", type(n).__name__)
+
     for _ in range(count):
         ctx.evaluator.execute(q)
 
@@ -717,7 +734,7 @@ def while_loop(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if not test_result.is_truthy():
+        if not _is_truthy(test_result):
             break
 
         ctx.evaluator.execute(p)
@@ -732,7 +749,7 @@ def loop(ctx: ExecutionContext) -> None:
     while True:
         ctx.evaluator.execute(q)
         test_result = ctx.stack.pop()
-        if not test_result.is_truthy():
+        if not _is_truthy(test_result):
             break
 
 
@@ -1045,7 +1062,7 @@ def linrec(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             # Base case: execute T and exit loop
             ctx.evaluator.execute(t)
             break
@@ -1074,7 +1091,7 @@ def binrec(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.evaluator.execute(t)
         else:
             ctx.evaluator.execute(r1)
@@ -1103,7 +1120,7 @@ def tailrec(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.evaluator.execute(t)
             break
         else:
@@ -1125,7 +1142,7 @@ def genrec(ctx: ExecutionContext) -> None:
         test_result = ctx.stack.pop()
         ctx.stack._items = saved
 
-        if test_result.is_truthy():
+        if _is_truthy(test_result):
             ctx.evaluator.execute(t)
         else:
             ctx.evaluator.execute(r1)
@@ -1185,7 +1202,7 @@ def condlinrec(ctx: ExecutionContext) -> None:
                 ctx.evaluator._execute_term(condition)
 
             test_result = ctx.stack.pop()
-            if test_result.is_truthy():
+            if _is_truthy(test_result):
                 matched = True
                 matched_idx = i
                 break
@@ -1277,7 +1294,7 @@ def condnestrec(ctx: ExecutionContext) -> None:
 
             test_result = ctx.stack.pop()
 
-            if test_result.is_truthy():
+            if _is_truthy(test_result):
                 ctx.stack._items = saved.copy()
                 _execute_body_with_recursion(body, condnestrec_aux)
                 return

@@ -2,6 +2,10 @@
 pyjoy.parser - Parser for Joy programs.
 
 Converts a token stream into an AST (nested structure of terms).
+
+Supports Python interop syntax (when python_interop=True):
+- PythonExpr: `expr` or $(expr) - evaluates and pushes result
+- PythonStmt: !stmt - executes Python statement (no push)
 """
 
 from __future__ import annotations
@@ -26,6 +30,26 @@ class Definition:
 
 
 @dataclass
+class PythonExpr:
+    """A Python expression to evaluate and push result.
+
+    Created from `expr` or $(expr) syntax.
+    """
+
+    code: str
+
+
+@dataclass
+class PythonStmt:
+    """A Python statement to execute (no push).
+
+    Created from !stmt syntax.
+    """
+
+    code: str
+
+
+@dataclass
 class ParseResult:
     """Result of parsing Joy source code."""
 
@@ -41,11 +65,14 @@ class Parser:
     - JoyValue literals (integers, floats, strings, etc.)
     - JoyQuotation for [...] blocks
     - Strings for symbols (resolved at runtime)
+    - PythonExpr for Python expressions (when python_interop=True)
+    - PythonStmt for Python statements (when python_interop=True)
     """
 
-    def __init__(self) -> None:
+    def __init__(self, python_interop: bool = False) -> None:
         self._tokens: List[Token] = []
         self._pos: int = 0
+        self._python_interop = python_interop
 
     def parse(self, source: str) -> JoyQuotation:
         """
@@ -74,7 +101,7 @@ class Parser:
         Returns:
             ParseResult with definitions inlined in program
         """
-        scanner = Scanner()
+        scanner = Scanner(python_interop=self._python_interop)
         self._tokens = list(scanner.tokenize(source))
         self._pos = 0
 
@@ -329,7 +356,7 @@ class Parser:
         Parse a single term.
 
         Returns:
-            JoyValue, JoyQuotation, string (symbol), or _SKIP
+            JoyValue, JoyQuotation, PythonExpr, PythonStmt, string (symbol), or _SKIP
         """
         token = self._current()
         if token is None:
@@ -369,6 +396,19 @@ class Parser:
 
             # Return as symbol string (late binding - resolved at runtime)
             return name
+
+        # Python interop tokens
+        elif token.type == "PYTHON_EXPR":
+            self._advance()
+            return PythonExpr(token.value)
+
+        elif token.type == "PYTHON_DOLLAR":
+            self._advance()
+            return PythonExpr(token.value)
+
+        elif token.type == "PYTHON_STMT":
+            self._advance()
+            return PythonStmt(token.value)
 
         elif token.type == "SEMICOLON":
             # Statement separator - skip
@@ -469,15 +509,16 @@ class Parser:
         return JoyValue.joy_set(frozenset(members))
 
 
-def parse(source: str) -> JoyQuotation:
+def parse(source: str, python_interop: bool = False) -> JoyQuotation:
     """
     Parse Joy source code into a program.
 
     Args:
         source: Joy source code
+        python_interop: If True, recognize Python interop syntax
 
     Returns:
         JoyQuotation representing the program
     """
-    parser = Parser()
+    parser = Parser(python_interop=python_interop)
     return parser.parse(source)

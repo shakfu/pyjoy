@@ -41,7 +41,6 @@ programming with aggregates in Joy.
 To add two integers, say 2 and 3, and to write their sum, you type the
 program
 
-      
             2  3  +
 
 This is ordinary postfix notation, a reverse form of a notation first
@@ -53,7 +52,6 @@ the addition operator pops the two integers off the stack and pushes
 their sum, 5. The system reads inputs like the above and executes them
 when they are terminated by a period `"."`, like this:
 
-      
             2  3  + .
 
 In the default mode there is no need for an explicit output instruction,
@@ -66,7 +64,6 @@ Apart from integers, the current version of Joy as extended by John
 Cowan has real numbers or "floats". Arithmetic operations on floats
 are just like those on integers. The following multiplies two numbers\
 
-      
             2.34  5.67  *
 
 and leaves their product, `13.2678`, on top of the stack. (So, to see
@@ -79,7 +76,6 @@ multiplied by itself. Preferably this should be done without computing
 the sum twice. The following is a program to compute the square of the
 sum of 2 and 3:
 
-      
             2  3  +  dup  *
 
 After the sum of 2 and 3 has been computed, the stack just contains the
@@ -101,7 +97,6 @@ A *list* of integers is written inside square brackets. Just as integers
 can be added and otherwise manipulated, so lists can be manipulated in
 various ways. The following `concat`enates two lists:
 
-      
             [1 2 3]  [4 5 6 7]  concat
 
 The two lists are first pushed onto the stack. Then the `concat`
@@ -113,7 +108,6 @@ The elements of a list need not be all of the same type, and the
 elements can be lists themselves. The following uses a list containing
 one integer, two floats and one list of three integers.
 
-      
             [ 3.14  42  [1 2 3]  0.003 ]   dup  concat
 
 The `dup` operator will push a copy of the list on top of the
@@ -126,7 +120,6 @@ to be the *quotation* of a program, enclosed in square brackets. One of
 these is a combinator for `map` elements of one list via a
 function to another list. Consider the program\
 
-      
             [1 2 3 4]  [dup *]  map
 
 It first pushes the list of integers and then the quoted program onto
@@ -139,7 +132,6 @@ In *definition*s of new functions no formal parameters are used, and
 hence there is no substitution of actual parameters for formal
 parameters. After the following definition\
 
-      
             square   ==   dup  *
 
 the symbol `square` can be used in place of ` dup * `.
@@ -147,7 +139,6 @@ the symbol `square` can be used in place of ` dup * `.
 Definitions occur in blocks such as the following:
 \
 
-      
         DEFINE
             square  ==  dup * ;
         cube    ==  dup dup * * .
@@ -171,14 +162,12 @@ combine the data parameter with the result of applying the function to
 its predecessor. For the factorial function the required quoted programs
 are very simple:
 
-      
             [1]  [*]  primrec
 
 computes the factorial recursively. There is no need for any definition.
 For example, the following program computes the factorial of `5`:
 \
 
-      
             5  [1]  [*]  primrec
 
 It first pushes the number `5` and then it pushes the two short quoted
@@ -217,7 +206,6 @@ section introduces literals and operators of the simple types.
 An *integer* is just a whole number. Literals of this type are written
 in decimal notation. The following binary operations are provided:
 
-      
             +        -        *        /        rem
 
 The first four have their conventional meaning, the last is the operator
@@ -225,7 +213,6 @@ for the remainder after division. Operators are written after their
 operands. Binary operators remove two values from the top of the stack
 and replace them by the result. For example, the program\
 
-      
             20  3  4  +  *  6  -  100  rem
 
 evaluates to 34, and this value is left on top of the stack. There are
@@ -240,7 +227,6 @@ with a decimal point and at least one digit after that. Optionally the
 last digit may be followed by \'E\' or \'e\' and then a positive or
 negative exponent. Here are some examples:
 
-      
             3.14     314.0     3.14E5    3.14e-5
 
 The last two are equivalent to 314000.0 and 0.0000314 . Most operators
@@ -257,7 +243,6 @@ numbers. That means that other numbers can be added to them, for example
 operators which are defined on characters and on integers: `pred`
 takes the predecessor, [succ]{.kbd} takes the successor. For example,
 
-      
             'A  32  +  succ  succ
 
 evaluates to `'c`, the third lower case letter.
@@ -266,13 +251,11 @@ The type of *truth value*s is what in some languages is called
 *Boolean*. The following are the two literals, the unary negation
 operator and two binary operators for conjunction and disjunction:
 
-      
             true        false        not        and        or
 
 For example, the program\
 \
 
-      
             false  true  false  not  and  not  or
 
 evaluates to `false`.
@@ -280,7 +263,6 @@ evaluates to `false`.
 Values of type integer and character can be compared using the following
 *relational operator*s:
 
-      
             =        <        >        !=        <=        >=
 
 The [!=]{.kbd} operator returns the negation of what the [=]{.kbd}
@@ -288,7 +270,6 @@ operator returns. The others have the conventional meaning. As all
 operators, they are written in postfix notation. The result is always a
 truth value. For example,\
 
-      
             'A  'E  <  2  3  +  15  3  /  =  and
 
 evaluates to `true`.
@@ -307,7 +288,6 @@ the elements is irrelevant and duplication has no effect. The operators
 for conjunction and disjunction are also defined on sets. For example,
 the two equivalent programs\
 
-      
             {1 3 5 7}  {2 4 6 8}  or  {}  or  {3 4 5 6 7 8 9 10}  and
             {3 7 5 1}  {2 4 6 8}  or  {}  or  {3 4 5 6 7 8 9 10 10} and
 
@@ -322,7 +302,6 @@ string is written as two adjacent double quotes with nothing inside:
 blank: `" "`. Two strings can be concatenated, and a string can be
 reversed. For example,\
 
-      
         "dooG"  reverse  " morning"  " "  concat concat  "world"  concat
 
 evaluates to `"Good morning world"`.
@@ -346,7 +325,6 @@ there, and for strings and lists the new member is added in front. Here
 are some examples. The programs on the left evaluate to the literals on
 the right.
 
-      
             5  3 {2 1}  cons  cons  3  swap  cons                {1 2 3 5}
             'E  'C  "AB"  cons  cons  'C  swap  cons               "CECAB"
             5  [6]  [1 2]  cons  cons  'A  swap  cons       ['A 5 [6] 1 2]
@@ -366,7 +344,6 @@ aggregate types, strings and lists, the meaning is obvious: the first
 operator returns the first element and the rest operator returns the
 string or list without the first element:
 
-      
             "CECAB"  first                                              'C
             "CECEB"  rest                                           "ECAB"
             ['A 5 [6] 1 2]  first                                       'A
@@ -377,7 +354,6 @@ first members *as sets*. But since their members are integers, the
 ordering on the integers can be used to determine what the first member
 is. Analogous considerations apply to the `rest` operator.
 
-      
             {5 2 3}  first                                                2
             {5 2 3}  rest                                             {3 5}
 
@@ -389,7 +365,6 @@ aggregate, by extracting a member **at** a numerically specified
 position. For example, the following are two equivalent programs to
 extract the fifth member of any aggregate:
 
-      
             rest  rest  rest  rest  first
             5  at
 
@@ -409,7 +384,6 @@ pops an item off the stack and writes it to the screen or whatever the
 output file is. The next program reads two pairs of integers and then
 compares the sum of the first pair with the sum of the second pair.
 
-      
             get  get  +  get  get  +  >  put
 
 The two `get` operators attempt to read two items and push them
@@ -424,7 +398,6 @@ input file and the output file are changed.
 
 For another example, the following conducts a silly little dialogue:
 
-      
             "What is your name?" put "Hello, " get concat put
 
 First the question string is pushed on the stack and then popped to be
@@ -448,7 +421,6 @@ other elements such as operators and some others that are explained
 below. A *quotation* can be treated as passive data structure just like
 a list. For example,
 
-      
             [ +  20  *  10  4  - ]
 
 has size `6`, its second and third elements are `20` and `*`, it can be
@@ -477,7 +449,6 @@ Syntactically speaking, its effect is to remove the quoting square
 brackets and thus to expose the quoted program for execution.
 Consequently the following two programs are equivalent:
 
-      
             [ +  20  *  10  4  - ]  i
               +  20  *  10  4  -
 
@@ -505,7 +476,6 @@ In the following example the three parts are pushed just before the
 the stack, and if it is greater than 1000 it will halve it, otherwise it
 will triple it.
 
-      
             [1000 >]  [2 /]  [3 *]  ifte
 
 Some combinators require that the stack contains values of certain
@@ -519,7 +489,6 @@ members of the second list and `swons` them into the initially empty
 first list. The effect is to reverse the non-empty list, yielding
 `[5 6 3 8 2]`.
 
-      
             []  [2 8 3 6 5]  [swons]  step
 
 The `map` combinator expects an aggregate value on top of the
@@ -537,7 +506,6 @@ values is greater than that of `Z`. Hence it can be used to remove upper
 case letters and blanks from a string. So the following evaluates to
 `"ohnmith"`:
 
-      
             "John Smith"   ['Z >]   filter
 
 Sometimes it is necessary to add or multiply or otherwise combine all
@@ -552,7 +520,6 @@ programs compute the sum of the members of a list and the sum of the
 squares of the members of a list. They evaluate to 10 and 38,
 respectively.
 
-      
             [2 5 3]  0  [+]  fold
             [2 5 3]  0  [dup * +]  fold
 
@@ -568,7 +535,6 @@ now on top of the stack. Take the size of that. Now the stack contains
 the sum and the size, with the size on top. Apply the division operator
 to obtain the average value.
 
-      
             dup  0  [+]  fold  swap  size  /
 
 One nice feature of this little program is that it works equally for set
@@ -588,7 +554,6 @@ constructed, by calling both functions by means of a combinator
 **cleave** which produces two values, one for the sum and one for the
 size. The program for the average looks like this:
 
-      
             [0 [+] fold]   [size]   cleave   /
 
 ## Definitions
@@ -598,7 +563,6 @@ arguments has to name these as formal parameters `x`, `y` \... For
 example, the squaring function might be defined by some variation of any
 of the following:
 
-      
             square(x)  =  x * x
             (defun (square x)  (* x x))
             square  =  lambda x.x * x
@@ -606,7 +570,6 @@ of the following:
 In Joy formal parameters such as `x` above are not required, a
 definition of the squaring function is simply
 
-      
             square   ==   dup  *
 
 This is one of the principal differences between Joy and those languages
@@ -629,7 +592,6 @@ language and aids in reasoning about Joy programs in the metalanguage.
 Suppose it is required to transform a list of numbers into the list of
 their cubes. The cube of a single number is of course computed by
 
-      
             dup  dup  *  *
 
 It would be possible to introduce a definition of the cube function. But
@@ -639,7 +601,6 @@ be desirable to give a definition of it at all. In Joy the list of cubes
 is computed by the first line below, but it is also possible to give an
 explicit definition as in the second line.
 
-      
             [dup dup * *]  map
             cubelist   ==   [dup dup * *] map
 
@@ -653,7 +614,6 @@ Suppose now that it is required to transform a *list of lists* of
 numbers into the *list of lists* of their cubes. One might give the
 definition
 
-      
             cubelistlist   ==   [ [dup dup * *] map ]  map
 
 Of course, if that function is only to be used once, one might not
@@ -662,7 +622,6 @@ In languages based on abstraction, at least two formal parameters are
 needed just for the right hand side, and another for the definition
 itself. For example, in Scheme the definition looks like this:
 
-      
             (define (cubelistlist ll)
                     (map (lambda (l)
                          (map (lambda (n) (* n (* n n)))
@@ -678,7 +637,6 @@ line below is a recursive definition of the factorial function in one of
 many variants of conventional notation. In the second line is a
 recursive definition in Joy.
 
-      
             factorial(x)  =  if x = 0 then 1 else x * factorial(x - 1)
             factorial  ==  [0 =] [pop 1] [dup 1 - factorial *] ifte
 
@@ -709,7 +667,6 @@ to be done by mechanisms more sophisticated than `dup`, `swap` and
 
 Here are some more definitions that one might have:
 
-      
             sum   ==   0  [+]  fold
             product   ==   1  [*]  fold
             average   ==   [sum]  [size]  constr12  /
@@ -723,7 +680,6 @@ which is the concatenation of a list of strings.
 If one wanted to compute the list of factorials of a given list, this
 could be done by\
 
-      
             [ factorial ]  map
 
 But this relies on an external definition of factorial. It was necessary
@@ -750,7 +706,6 @@ combinator requires three quoted parameters, the `linrec` combinator
 requires four: an if-part, a then-part, an else1-part and an else2-part.
 For example, the factorial function could be computed by
 
-      
             [null]  [succ]  [dup pred]  [*]  linrec
 
 There is no need for a definition, the above program can be used
@@ -769,14 +724,12 @@ has to be supplied with two quotation parameters, the (modified)
 then-part and the else2-part of linear recursion. For the factorial
 function the two quotation parameters are very simple:
 
-      
             [1]  [*]  primrec
 
 computes the factorial function. So, if one wanted to compute the list
 of factorial of a given list of numbers this can be done by either of
 the following:
 
-      
             [ [null]  [succ]  [dup pred]  [*]  linrec ]   map
             [ [1]  [*]  primrec ]   map
 
@@ -784,7 +737,6 @@ The factorial of a number is the product of successive natural numbers
 up to the actual parameter. The following compute instead their sums and
 the sum of their squares:
 
-      
             [0]  [+]  primrec
             [0]  [dup * +]  primrec
 
@@ -793,14 +745,12 @@ be applied to parameters of quite different types. The combinator
 `primrec` can be applied not only to numbers but also to lists. For
 example, applied to the list `[1 2 3]` the program
 
-      
             [[]]  [[] cons cons]  primrec
 
 produces the list `[1 [2 [3 []]]]`. Lisp programmers will recognise a
 similarity to "dotted pairs". In the following, the first turns a set
 of numbers into a list, the second turns a list of numbers into a set:
 
-      
             [[]]  [cons]  primrec
             [{}]  [cons]  primrec
 
@@ -819,7 +769,6 @@ The following will *quicksort* a list whose members can be a mixture of
 anything except lists. The program easily fits onto one line, but for
 reference it is here written over several numbered lines:
 
-      
         1           [small]
         2           []
         3           [uncons [>] split]
@@ -862,7 +811,6 @@ combinator without the need for a definition. For example, the following
 computes the *Fibonacci* function; it implements the usual inefficient
 algorithm:
 
-      
             [small]  []  [pred dup pred]  [+]  binrec
 
 The system library of course contains the well known efficient
@@ -879,13 +827,10 @@ possibly deeply embedded within lists is the squaring function
 
 Here is an example:
 
-      
             [ 1 [2 3] [[[4]]] 5 ]  [dup *]  [map]  treerec
 
 produces
 
-
-      
             [ 1 [2 9] [[[16]]] 25 ]
 
 All of these combinators can be defined in other functional languages,
@@ -902,12 +847,10 @@ operator. For an aggregate of size `N` it produces a list of all the
 
 Here is an example:
 
-      
             [1 2 3]  powerlist
 
 produces as result
 
-      
             [ [1 2 3] [1 2] [1 3] [1] [2 3] [2] [3] [] ]
 
 If the ordering does not suit, the result list can always be rearranged,
@@ -917,12 +860,10 @@ aggregate and a quoted operator as parameters and it applies the
 operator to each member of the aggregate to use as the basis for sorting
 them.
 
-      
             [1 2 3]  powerlist  [size]  mk_qsort
 
 produces as a result
 
-      
             [ [] [1] [2] [3] [1 2] [1 3] [2 3] [1 2 3] ]
 
 The powerlist operators can also be applied to a string. The result is a
@@ -932,7 +873,6 @@ than 3. This is achieved by the `filter` combinator which expects
 an aggregate and a quoted predicate. The first line is the program, the
 second line is the result:
 
-      
             "abcde"  powerlist  [size 3 >]  filter
             [ "abcde" "abcd" "abce" "abde" "acde" "bcde" ]
 
@@ -940,7 +880,6 @@ The powerlist operators can also be applied to a set. In the program on
 the first line below the list of subsets is then filtered to retain only
 those of size 3; the result is the list of subsets in the second line:
 
-      
             {1 2 3 4}  powerlist  [size 3 =]  filter
             [ {1 2 3} {1 2 4} {1 3 4} {2 3 4} ]
 
@@ -952,7 +891,6 @@ combinator applied to the whole list. The resulting list of sums then
 needs to be sorted. The example in the first line does just that, giving
 the result in the second line:
 
-      
             {1 2 3 4 5}  powerlist  [size 3 =] filter  [sum] map  qsort
             [6 7 8 8 9 9 10 10 11 12]
 
@@ -960,7 +898,6 @@ In the remainder of this section a small program is to be constructed
 which takes one sequence as parameter and returns the list of all
 *permutation*s of that sequence. Here is a first draft:
 
-      
     1         If  S has only zero or one member
     2             then it has only one permutation, so take its unit list
     3             else  take the first and rest of S,
@@ -970,7 +907,6 @@ which takes one sequence as parameter and returns the list of all
 The recursion pattern is linear, so we can use the `linrec`
 combinator to arrive at this first incomplete program:
 
-      
     1       [ small ]
     2       [ unitlist ]
     3       [ uncons ]
@@ -997,7 +933,6 @@ list of permutations. But this is a two-level list, and it should be
 one-level. So the two level list has to be flattened to a one-level
 list.
 
-      
     4.1             [ swap
     4.2               [ "the constant part of the program" ]
     4.3               cons map
@@ -1015,7 +950,6 @@ the current permutation with the original first `swons` in as an initial
 element. So the task is now to insert this inital element into all
 positions in the remainder which is the current permutation.
 
-      
     4.2.2.1         If  the current sequence is small
     4.2.2.2             then return just its unit list
     4.2.2.3             else  keep  1. a copy
@@ -1028,7 +962,6 @@ positions in the remainder which is the current permutation.
 
 So the constant part 4.2 looks like this:
 
-      
     4.2.1             [ swons
     4.2.2.1             [ small ]
     4.2.2.2             [ unitlist ]
@@ -1044,13 +977,11 @@ concatenate the saved first into the result.
 Here is the required program:
 \
 
-      
     4.4             [ null ] [ ] [ uncons ] [ concat]  linrec
 
 The entire program now is the following:
 \
 
-      
     1               [ small ]
     2               [ unitlist ]
     3               [ uncons ]
@@ -1076,4 +1007,3 @@ combinator three times and the `map` combinator twice, with
 Of course such a program can be written in lambda calculus languages
 such as *Lisp*, *Scheme*, *ML* or *Haskell*, but it would need many
 recursive definitions with attendant named formal parameters.
-

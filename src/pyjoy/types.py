@@ -35,6 +35,7 @@ class JoyType(Enum):
     QUOTATION = auto()
     SYMBOL = auto()
     FILE = auto()  # File handle for I/O operations
+    OBJECT = auto()  # Opaque Python object (strict=False mode only)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +71,9 @@ class JoyValue:
             return (
                 f"file:{self.value.name if hasattr(self.value, 'name') else 'stream'}"
             )
+        elif self.type == JoyType.OBJECT:
+            type_name = type(self.value).__name__
+            return f"<object:{type_name}>"
         else:
             return str(self.value)
 
@@ -130,6 +134,11 @@ class JoyValue:
         """Create a FILE value (wraps a Python file object)."""
         return cls(JoyType.FILE, handle)
 
+    @classmethod
+    def object(cls, obj: Any) -> JoyValue:
+        """Create an OBJECT value (opaque Python object, strict=False only)."""
+        return cls(JoyType.OBJECT, obj)
+
     # Type checking helpers
 
     def is_numeric(self) -> bool:
@@ -158,6 +167,8 @@ class JoyValue:
             return len(self.value.terms) > 0
         elif self.type == JoyType.FILE:
             return self.value is not None
+        elif self.type == JoyType.OBJECT:
+            return bool(self.value)  # Use Python's truthiness
         else:
             return True
 
@@ -207,18 +218,20 @@ def _term_repr(term: Any) -> str:
         return repr(term)
 
 
-def python_to_joy(value: Any) -> JoyValue:
+def python_to_joy(value: Any, strict: bool = True) -> JoyValue:
     """
     Convert a Python value to a JoyValue with type inference.
 
     Args:
         value: Python value to convert
+        strict: If True (default), raise on non-Joy types.
+                If False, wrap arbitrary objects as OBJECT type.
 
     Returns:
         JoyValue with appropriate type tag
 
     Raises:
-        JoyTypeError: If the value cannot be converted
+        JoyTypeError: If the value cannot be converted (in strict mode)
     """
     if isinstance(value, JoyValue):
         return value
@@ -236,11 +249,11 @@ def python_to_joy(value: Any) -> JoyValue:
         return JoyValue.string(value)
     elif isinstance(value, tuple):
         # Convert tuple elements recursively
-        converted = tuple(python_to_joy(x) for x in value)
+        converted = tuple(python_to_joy(x, strict) for x in value)
         return JoyValue.list(converted)
     elif isinstance(value, list):
         # Convert list to tuple, then to Joy list
-        converted = tuple(python_to_joy(x) for x in value)
+        converted = tuple(python_to_joy(x, strict) for x in value)
         return JoyValue.list(converted)
     elif isinstance(value, frozenset):
         # Validate set members
@@ -252,6 +265,9 @@ def python_to_joy(value: Any) -> JoyValue:
         return JoyValue.joy_set(value)
     elif isinstance(value, JoyQuotation):
         return JoyValue.quotation(value)
+    elif not strict:
+        # In non-strict mode, wrap arbitrary Python objects
+        return JoyValue.object(value)
     else:
         raise JoyTypeError("python_to_joy", "convertible type", type(value).__name__)
 
@@ -270,6 +286,8 @@ def joy_to_python(value: JoyValue) -> Any:
         return tuple(joy_to_python(v) for v in value.value)
     elif value.type == JoyType.QUOTATION:
         return value.value  # Keep as JoyQuotation
+    elif value.type == JoyType.OBJECT:
+        return value.value  # Unwrap Python object
     else:
         return value.value
 
