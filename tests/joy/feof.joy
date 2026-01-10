@@ -3,4 +3,4 @@
     version : 1.4
     date    : 03/21/24
 *)
-"tests/joy/feof.joy" "r" fopen feof false =.
+"feof.joy" "r" fopen feof false =.

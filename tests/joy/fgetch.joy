@@ -3,4 +3,4 @@
     version : 1.4
     date    : 03/21/24
 *)
-"tests/joy/fgetch.joy" "r" fopen fgetch '( =.
+"fgetch.joy" "r" fopen fgetch '( =.

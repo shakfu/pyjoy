@@ -283,6 +283,23 @@ bool joy_value_equal(JoyValue a, JoyValue b) {
         return strcmp(a.data.string, b.data.string) == 0;
     }
 
+    /* FLOAT vs SET: compare IEEE 754 bit representation */
+    if (a.type == JOY_FLOAT && b.type == JOY_SET) {
+        uint64_t float_bits;
+        memcpy(&float_bits, &a.data.floating, sizeof(double));
+        return float_bits == b.data.set;
+    }
+    if (a.type == JOY_SET && b.type == JOY_FLOAT) {
+        uint64_t float_bits;
+        memcpy(&float_bits, &b.data.floating, sizeof(double));
+        return a.data.set == float_bits;
+    }
+
+    /* FILE comparison: equal if same file pointer */
+    if (a.type == JOY_FILE && b.type == JOY_FILE) {
+        return a.data.file == b.data.file;
+    }
+
     /* Try numeric comparison */
     double av, bv;
     if (joy_numeric_value(a, &av) && joy_numeric_value(b, &bv)) {
@@ -744,7 +761,7 @@ JoyContext* joy_context_new(void) {
     ctx->stack = joy_stack_new(64);
     ctx->dictionary = joy_dict_new();
     ctx->trace_enabled = false;
-    ctx->autoput = 0;      /* off by default in compiled code */
+    ctx->autoput = 1;      /* on by default (matches Joy42) */
     ctx->undeferror = 0;   /* undefined symbols are errors by default */
     ctx->echo = 0;         /* no echo by default */
     return ctx;

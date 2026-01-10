@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import shutil
 import subprocess
 import sys
@@ -302,7 +303,12 @@ def run_single_test(
     def timeout_handler(signum, frame):
         raise TimeoutError("Test timed out")
 
+    # Save original directory and change to test file's directory
+    # This ensures relative file paths work (e.g., fopen.joy opens "fopen.joy")
+    original_cwd = os.getcwd()
     try:
+        os.chdir(filepath.parent)
+
         # Set timeout (Unix only)
         if hasattr(signal, "SIGALRM"):
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
@@ -344,6 +350,8 @@ def run_single_test(
         return "error", f"Joy error: {e}"
     except Exception as e:
         return "error", f"{type(e).__name__}: {e}"
+    finally:
+        os.chdir(original_cwd)
 
 
 def cmd_test_compile(files: list[Path], verbose: bool = False) -> int:
@@ -379,11 +387,14 @@ def cmd_test_compile(files: list[Path], verbose: bool = False) -> int:
                 source_path=filepath,
             )
 
+            # Use absolute path since we run from test file's directory
+            exe_path = result["executable"].resolve()
             proc = subprocess.run(
-                [str(result["executable"])],
+                [str(exe_path)],
                 capture_output=True,
                 text=True,
                 timeout=10,
+                cwd=filepath.parent,  # Run from test file's directory
             )
 
             if "false" in proc.stdout.lower():

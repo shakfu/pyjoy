@@ -33,6 +33,14 @@ Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support 
 
 - Test runner: Fixed false positive detection - now only detects "false" at line start (not in help/manual docs)
 - C backend: Float infinity/NaN now emit `INFINITY`/`-INFINITY`/`NAN` macros instead of invalid `inf` literals
+- C backend: `autoput` default changed to 1 (matching Joy42)
+- C backend: `div` now pushes both quotient and remainder (divmod semantics)
+- C backend: `unstack` now accepts QUOTATION in addition to LIST
+- C backend: `name` returns Joy42 type strings (e.g., " integer type")
+- C backend: `setecho` now actually sets the echo flag (was no-op)
+- C backend: `iflist` now accepts QUOTATION in addition to LIST
+- C backend: `infra` fixed stack order (TOS-first for input and output)
+- C backend: FLOAT/SET equality now compares IEEE 754 bit representation
 - `inf`/`-inf`/`nan`: Scanner now recognizes special float literals (with word boundary and definition lookahead)
 - `casting`: INT->FLOAT now uses bit-level reinterpretation (treats integer bits as IEEE 754 double)
 - `strtol`: Base-0 now auto-detects hex (0x prefix) and octal (0 prefix) like C's strtol
@@ -108,7 +116,7 @@ Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support 
 ### Coverage
 
 - Python interpreter: 209/215 Joy tests passing (97.2%)
-- C backend: 198/215 Joy tests passing (92.1%)
+- C backend: 205/215 Joy tests passing (95.3%)
 - pytest: 712/712 unit tests passing (100%)
 
 ---

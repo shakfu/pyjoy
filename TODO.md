@@ -3,10 +3,10 @@
 ## Current Test Results
 
 **Python Interpreter:** 209/215 tests passing (97.2%)
-**C Backend:** 198/215 tests passing (92.1%)
+**C Backend:** 205/215 tests passing (95.3%)
 **pytest (unit tests):** 712/712 passing (100%)
 
-Note: Recent fixes include `inf`/`-inf` float literals, bit-level INT->FLOAT casting, `strtol` base-0 detection, test runner false positive fix, C backend INFINITY/NAN support.
+Note: Recent C backend fixes include autoput default, div/divmod, unstack, name, setecho, iflist, infra, float/SET equality.
 
 ---
 

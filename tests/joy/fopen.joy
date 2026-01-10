@@ -4,4 +4,4 @@
     date    : 04/15/24
 *)
 "fopen.joy" "r" fopen dup putln file.
-"exist" "r" fopen.
+"exist" "r" fopen false =.  (* opening non-existent file returns false *)

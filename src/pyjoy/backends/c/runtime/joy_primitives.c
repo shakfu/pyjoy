@@ -176,10 +176,17 @@ static void prim_stack(JoyContext* ctx) {
 static void prim_unstack(JoyContext* ctx) {
     REQUIRE(1, "unstack");
     JoyValue v = POP();
-    EXPECT_TYPE(v, JOY_LIST, "unstack");
     joy_stack_clear(ctx->stack);
-    for (size_t i = v.data.list->length; i > 0; i--) {
-        PUSH(joy_value_copy(v.data.list->items[i-1]));
+    if (v.type == JOY_LIST) {
+        for (size_t i = v.data.list->length; i > 0; i--) {
+            PUSH(joy_value_copy(v.data.list->items[i-1]));
+        }
+    } else if (v.type == JOY_QUOTATION) {
+        for (size_t i = v.data.quotation->length; i > 0; i--) {
+            PUSH(joy_value_copy(v.data.quotation->terms[i-1]));
+        }
+    } else {
+        joy_error_type("unstack", "list or quotation", v.type);
     }
     joy_value_free(&v);
 }
@@ -260,6 +267,18 @@ static void prim_rem(JoyContext* ctx) {
     EXPECT_TYPE(b, JOY_INTEGER, "rem");
     if (b.data.integer == 0) joy_error("Division by zero");
     PUSH(joy_integer(a.data.integer % b.data.integer));
+}
+
+static void prim_divmod(JoyContext* ctx) {
+    /* N1 N2 -> Q R : integer division with remainder (quotient then remainder) */
+    REQUIRE(2, "div");
+    JoyValue b = POP();
+    JoyValue a = POP();
+    EXPECT_TYPE(a, JOY_INTEGER, "div");
+    EXPECT_TYPE(b, JOY_INTEGER, "div");
+    if (b.data.integer == 0) joy_error("Division by zero");
+    PUSH(joy_integer(a.data.integer / b.data.integer));  /* quotient */
+    PUSH(joy_integer(a.data.integer % b.data.integer));  /* remainder */
 }
 
 static void prim_succ(JoyContext* ctx) {
@@ -1800,12 +1819,12 @@ static void prim_dot(JoyContext* ctx) {
     }
 }
 
-/* Debug commands - no-op in compiled code */
 static void prim_setecho(JoyContext* ctx) {
+    /* I -> : set echo mode (0-3) */
     REQUIRE(1, "setecho");
     JoyValue v = POP();
-    joy_value_free(&v);
-    /* No-op: echo mode not relevant for compiled code */
+    EXPECT_TYPE(v, JOY_INTEGER, "setecho");
+    ctx->echo = (int)v.data.integer;
 }
 
 static void prim_settracegc(JoyContext* ctx) {
@@ -1953,15 +1972,16 @@ static void prim_infra(JoyContext* ctx) {
     /* Save current stack */
     JoyStack* saved = joy_stack_copy(ctx->stack);
 
-    /* Replace stack with list/quotation contents */
+    /* Replace stack with list/quotation contents (list is TOS-first, stack is bottom-first) */
     joy_stack_clear(ctx->stack);
     if (lst.type == JOY_LIST) {
-        for (size_t i = 0; i < lst.data.list->length; i++) {
-            joy_stack_push(ctx->stack, joy_value_copy(lst.data.list->items[i]));
+        /* Push in reverse order so first list element becomes TOS */
+        for (size_t i = lst.data.list->length; i > 0; i--) {
+            joy_stack_push(ctx->stack, joy_value_copy(lst.data.list->items[i-1]));
         }
     } else if (lst.type == JOY_QUOTATION) {
-        for (size_t i = 0; i < lst.data.quotation->length; i++) {
-            joy_stack_push(ctx->stack, joy_value_copy(lst.data.quotation->terms[i]));
+        for (size_t i = lst.data.quotation->length; i > 0; i--) {
+            joy_stack_push(ctx->stack, joy_value_copy(lst.data.quotation->terms[i-1]));
         }
     } else {
         joy_stack_free(saved);
@@ -1973,10 +1993,10 @@ static void prim_infra(JoyContext* ctx) {
     /* Execute quotation */
     execute_quot(ctx, &quot);
 
-    /* Collect result as list */
+    /* Collect result as list (TOS first order) */
     JoyList* result = joy_list_new(ctx->stack->depth);
-    for (size_t i = 0; i < ctx->stack->depth; i++) {
-        joy_list_push(result, joy_value_copy(ctx->stack->items[i]));
+    for (size_t i = ctx->stack->depth; i > 0; i--) {
+        joy_list_push(result, joy_value_copy(ctx->stack->items[i-1]));
     }
 
     /* Restore original stack and push result */
@@ -2583,12 +2603,12 @@ static void prim_ifstring(JoyContext* ctx) {
 }
 
 static void prim_iflist(JoyContext* ctx) {
-    /* X [T] [E] -> ... : if X is list, execute T, else E */
+    /* X [T] [E] -> ... : if X is list or quotation, execute T, else E */
     REQUIRE(3, "iflist");
     JoyValue e_quot = POP();
     JoyValue t_quot = POP();
     JoyValue x = POP();
-    bool is_type = (x.type == JOY_LIST);
+    bool is_type = (x.type == JOY_LIST || x.type == JOY_QUOTATION);
     PUSH(x);
     if (is_type) {
         execute_quot(ctx, &t_quot);
@@ -3088,23 +3108,24 @@ static void prim_fgetch(JoyContext* ctx) {
 }
 
 static void prim_fgets(JoyContext* ctx) {
-    /* S -> S L : read line from file as list of chars */
+    /* S -> S L : read line from file as string */
     REQUIRE(1, "fgets");
     JoyValue v = PEEK();
     EXPECT_TYPE(v, JOY_FILE, "fgets");
 
-    JoyList* chars = joy_list_new(80);
+    char buffer[4096];
+    size_t len = 0;
     if (v.data.file) {
         int c;
-        while ((c = fgetc(v.data.file)) != EOF && c != '\n') {
-            joy_list_push(chars, joy_char((char)c));
+        while (len < sizeof(buffer) - 1 && (c = fgetc(v.data.file)) != EOF && c != '\n') {
+            buffer[len++] = (char)c;
         }
-        if (c == '\n') {
-            joy_list_push(chars, joy_char('\n'));
+        if (c == '\n' && len < sizeof(buffer) - 1) {
+            buffer[len++] = '\n';
         }
     }
-    JoyValue result = {.type = JOY_LIST, .data.list = chars};
-    PUSH(result);
+    buffer[len] = '\0';
+    PUSH(joy_string(buffer));
 }
 
 static void prim_fread(JoyContext* ctx) {
@@ -3230,7 +3251,9 @@ static void prim_fwrite(JoyContext* ctx) {
 }
 
 static void prim_fseek(JoyContext* ctx) {
-    /* S P W -> S : seek in file (P=position, W=whence: 0=SET, 1=CUR, 2=END) */
+    /* S P W -> S B : seek in file, push success status */
+    /* P=position, W=whence: 0=SET, 1=CUR, 2=END */
+    /* C fseek returns 0 on success, non-zero on failure */
     REQUIRE(3, "fseek");
     JoyValue whence = POP();
     JoyValue pos = POP();
@@ -3239,14 +3262,17 @@ static void prim_fseek(JoyContext* ctx) {
     EXPECT_TYPE(pos, JOY_INTEGER, "fseek");
     EXPECT_TYPE(whence, JOY_INTEGER, "fseek");
 
+    int result = -1;  /* Failure by default */
     if (v.data.file) {
         int w = SEEK_SET;
         if (whence.data.integer == 1) w = SEEK_CUR;
         else if (whence.data.integer == 2) w = SEEK_END;
-        fseek(v.data.file, (long)pos.data.integer, w);
+        result = fseek(v.data.file, (long)pos.data.integer, w);
     }
     joy_value_free(&pos);
     joy_value_free(&whence);
+    /* Push false on success (0), true on failure (non-zero) */
+    PUSH(joy_boolean(result != 0));
 }
 
 static void prim_ftell(JoyContext* ctx) {
@@ -4131,7 +4157,7 @@ static void prim_in(JoyContext* ctx) {
 }
 
 static void prim_name(JoyContext* ctx) {
-    /* sym -> "sym" : convert symbol to its name string */
+    /* sym -> "sym" : convert symbol to its name string, or type name for non-symbols */
     REQUIRE(1, "name");
     JoyValue v = POP();
 
@@ -4144,39 +4170,43 @@ static void prim_name(JoyContext* ctx) {
         }
         case JOY_INTEGER:
             joy_value_free(&v);
-            PUSH(joy_string("integer"));
+            PUSH(joy_string(" integer type"));
             break;
         case JOY_FLOAT:
             joy_value_free(&v);
-            PUSH(joy_string("float"));
+            PUSH(joy_string(" float type"));
             break;
         case JOY_BOOLEAN:
             joy_value_free(&v);
-            PUSH(joy_string("boolean"));
+            PUSH(joy_string(" truth value type"));
             break;
         case JOY_CHAR:
             joy_value_free(&v);
-            PUSH(joy_string("char"));
+            PUSH(joy_string(" character type"));
             break;
         case JOY_STRING:
             joy_value_free(&v);
-            PUSH(joy_string("string"));
+            PUSH(joy_string(" string type"));
             break;
         case JOY_LIST:
             joy_value_free(&v);
-            PUSH(joy_string("list"));
+            PUSH(joy_string(" list type"));
             break;
         case JOY_SET:
             joy_value_free(&v);
-            PUSH(joy_string("set"));
+            PUSH(joy_string(" set type"));
             break;
         case JOY_QUOTATION:
             joy_value_free(&v);
-            PUSH(joy_string("quotation"));
+            PUSH(joy_string(" list type"));
+            break;
+        case JOY_FILE:
+            joy_value_free(&v);
+            PUSH(joy_string(" file type"));
             break;
         default:
             joy_value_free(&v);
-            PUSH(joy_string("unknown"));
+            PUSH(joy_string(" unknown type"));
     }
 }
 
@@ -4553,7 +4583,7 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "case", prim_case);
 
     /* Additional math */
-    joy_dict_define_primitive(d, "div", prim_div);
+    joy_dict_define_primitive(d, "div", prim_divmod);
     joy_dict_define_primitive(d, "frexp", prim_frexp);
     joy_dict_define_primitive(d, "ldexp", prim_ldexp);
     joy_dict_define_primitive(d, "modf", prim_modf);

@@ -172,6 +172,7 @@ def fopen(ctx: ExecutionContext) -> None:
             f = open(path.value, mode.value, encoding="utf-8")
         ctx.stack.push_value(JoyValue.file(f))
     except (OSError, IOError):
+        # Joy reference: fopen returns NULL file stream on failure
         ctx.stack.push_value(JoyValue.file(None))
 
 
