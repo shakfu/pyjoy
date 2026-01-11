@@ -271,15 +271,9 @@ class TestDualModeStackOps:
 def unwrap_list(result):
     """Unwrap a list result to raw Python values for comparison."""
     if isinstance(result, (list, tuple)):
-        return tuple(
-            v.value if isinstance(v, JoyValue) else v
-            for v in result
-        )
+        return tuple(v.value if isinstance(v, JoyValue) else v for v in result)
     if isinstance(result, JoyQuotation):
-        return tuple(
-            v.value if isinstance(v, JoyValue) else v
-            for v in result.terms
-        )
+        return tuple(v.value if isinstance(v, JoyValue) else v for v in result.terms)
     return result
 
 

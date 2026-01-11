@@ -52,7 +52,11 @@ class Scanner:
         # Special float literals must come before numeric float
         # - for inf/nan: word boundary at end, negative lookahead for ==
         # - for -inf: preceded by non-word char or start, word boundary at end
-        ("FLOAT_SPECIAL", r"(?:(?<![a-zA-Z0-9_])-inf|(?<![a-zA-Z0-9_])inf|(?<![a-zA-Z0-9_])nan)(?![a-zA-Z0-9_])(?!\s*==)"),  # inf, -inf, nan
+        (
+            "FLOAT_SPECIAL",
+            r"(?:(?<![a-zA-Z0-9_])-inf|(?<![a-zA-Z0-9_])inf|(?<![a-zA-Z0-9_])nan)"
+            r"(?![a-zA-Z0-9_])(?!\s*==)",
+        ),  # inf, -inf, nan
         ("FLOAT", r"-?\d+\.\d+(?:[eE][+-]?\d+)?"),  # 3.14, -2.5e10
         ("INTEGER", r"-?\d+"),  # 42, -17
         ("STRING", r'"(?:[^"\\]|\\.)*"'),  # "hello"
@@ -99,9 +103,7 @@ class Scanner:
         pattern = "|".join(f"(?P<{name}>{pat})" for name, pat in self.PATTERNS)
         self._regex = re.compile(pattern, re.DOTALL)
 
-    def tokenize(
-        self, source: str, execute_shell: bool = True
-    ) -> Iterator[Token]:
+    def tokenize(self, source: str, execute_shell: bool = True) -> Iterator[Token]:
         """
         Generate tokens from source code.
 

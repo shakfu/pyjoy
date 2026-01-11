@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.1]
 
 ### Added - Dual-Mode Architecture
 
@@ -119,9 +119,7 @@ Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support 
 - C backend: 205/215 Joy tests passing (95.3%)
 - pytest: 712/712 unit tests passing (100%)
 
----
-
-## [Previous]
+## [0.1.0]
 
 ### Fixed
 

@@ -465,7 +465,7 @@ DEFINE\ttest == [[[dup 1 =] "one"]
         import io
         import sys
 
-        source = '''DEFINE test == [[[dup 1 =] "one"]
+        source = """DEFINE test == [[[dup 1 =] "one"]
          [[dup 2 =] "two"]
          ["other"]] cond.
 
@@ -475,7 +475,7 @@ DEFINE\ttest == [[[dup 1 =] "one"]
 DEFINE test == [["other"]] cond.
 
 1 test "other" =.
-'''
+"""
         old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         evaluator_with_stdlib.run(source)

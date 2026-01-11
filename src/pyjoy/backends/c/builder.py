@@ -275,9 +275,7 @@ def compile_joy_to_c(
 
     # Extract definitions from program terms (they're now inlined)
     definitions = {
-        t.name: t.body
-        for t in parse_result.program.terms
-        if isinstance(t, Definition)
+        t.name: t.body for t in parse_result.program.terms if isinstance(t, Definition)
     }
 
     # Convert to C representation

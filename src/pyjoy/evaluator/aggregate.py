@@ -115,7 +115,8 @@ def _make_aggregate(
             try:
                 if items and is_joy_value(items[0]):
                     chars = "".join(
-                        v.value for v in items
+                        v.value
+                        for v in items
                         if is_joy_value(v) and v.type == JoyType.CHAR
                     )
                 else:
@@ -127,7 +128,8 @@ def _make_aggregate(
             try:
                 if items and is_joy_value(items[0]):
                     members = frozenset(
-                        v.value for v in items
+                        v.value
+                        for v in items
                         if is_joy_value(v) and v.type == JoyType.INTEGER
                     )
                 else:
@@ -145,7 +147,8 @@ def _make_aggregate(
             try:
                 if items and is_joy_value(items[0]):
                     return "".join(
-                        v.value for v in items
+                        v.value
+                        for v in items
                         if is_joy_value(v) and v.type == JoyType.CHAR
                     )
                 else:
@@ -156,7 +159,8 @@ def _make_aggregate(
             try:
                 if items and is_joy_value(items[0]):
                     return frozenset(
-                        v.value for v in items
+                        v.value
+                        for v in items
                         if is_joy_value(v) and v.type == JoyType.INTEGER
                     )
                 else:

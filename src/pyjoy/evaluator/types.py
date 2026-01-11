@@ -34,6 +34,7 @@ def _push_integer(ctx: ExecutionContext, result: int) -> None:
     else:
         ctx.stack.push(result)
 
+
 # -----------------------------------------------------------------------------
 # Type Predicates
 # -----------------------------------------------------------------------------
@@ -144,7 +145,7 @@ def is_file(ctx: ExecutionContext) -> None:
         result = x.type == JoyType.FILE
     else:
         # In pythonic mode, check for file-like object
-        result = hasattr(x, 'read') and hasattr(x, 'write')
+        result = hasattr(x, "read") and hasattr(x, "write")
     _push_boolean(ctx, result)
 
 
@@ -219,7 +220,12 @@ def sametype(ctx: ExecutionContext) -> None:
             elif a_is_usrdef and b_is_usrdef:
                 # Two user-defined - always sametype
                 result = True
-            elif not a_is_builtin and not a_is_usrdef and not b_is_builtin and not b_is_usrdef:
+            elif (
+                not a_is_builtin
+                and not a_is_usrdef
+                and not b_is_builtin
+                and not b_is_usrdef
+            ):
                 # Both are unknown symbols - same unknown type
                 result = True
             else:
@@ -288,7 +294,7 @@ def typeof_(ctx: ExecutionContext) -> None:
         _push_integer(ctx, 9)  # LIST
     elif isinstance(x, frozenset):
         _push_integer(ctx, 7)  # SET
-    elif hasattr(x, 'read') and hasattr(x, 'write'):
+    elif hasattr(x, "read") and hasattr(x, "write"):
         _push_integer(ctx, 11)  # FILE
     else:
         _push_integer(ctx, 0)  # UNKNOWN
@@ -354,7 +360,8 @@ def casting_(ctx: ExecutionContext) -> None:
         else:
             x_type = JoyType.OBJECT
 
-    # Joy42 type codes: 4=bool, 5=char, 6=int, 7=set, 8=string, 9=list, 10=float, 11=file
+    # Joy42 type codes:
+    # 4=bool, 5=char, 6=int, 7=set, 8=string, 9=list, 10=float, 11=file
     if target_type == 4:  # BOOLEAN
         result = _is_truthy(x)
         push_result(JoyValue.boolean(result) if ctx.strict else result)
@@ -413,7 +420,8 @@ def casting_(ctx: ExecutionContext) -> None:
                 )
             else:
                 items = frozenset(
-                    v for v in x_val  # type: ignore[union-attr]
+                    v
+                    for v in x_val  # type: ignore[union-attr]
                     if isinstance(v, int) and not isinstance(v, bool)
                 )
             push_result(JoyValue.joy_set(items) if ctx.strict else items)
@@ -440,7 +448,8 @@ def casting_(ctx: ExecutionContext) -> None:
                 )
             else:
                 chars = "".join(
-                    str(v) for v in x_val  # type: ignore[union-attr]
+                    str(v)
+                    for v in x_val  # type: ignore[union-attr]
                     if isinstance(v, str) and len(v) == 1
                 )
             push_result(JoyValue.string(chars) if ctx.strict else chars)
@@ -595,7 +604,7 @@ def _check_is_file(x: Any) -> bool:
     """Check if x is a file (mode-aware)."""
     if is_joy_value(x):
         return x.type == JoyType.FILE
-    return hasattr(x, 'read') and hasattr(x, 'write')
+    return hasattr(x, "read") and hasattr(x, "write")
 
 
 def _push_value_for_conditional(ctx: ExecutionContext, x: Any) -> None:

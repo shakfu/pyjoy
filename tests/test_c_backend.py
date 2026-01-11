@@ -28,6 +28,7 @@ def get_non_definitions(result):
     """Extract non-Definition terms from parsed program."""
     return [t for t in result.program.terms if not isinstance(t, Definition)]
 
+
 # Skip all tests if no C compiler is available
 pytestmark = pytest.mark.skipif(
     not shutil.which("gcc") and not shutil.which("clang"),

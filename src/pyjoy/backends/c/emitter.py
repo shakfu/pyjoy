@@ -122,6 +122,7 @@ class CEmitter:
 
         elif value.type == "float":
             import math
+
             if math.isinf(value.value):
                 if value.value > 0:
                     return "joy_float(INFINITY)"

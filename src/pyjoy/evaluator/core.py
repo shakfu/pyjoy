@@ -48,6 +48,7 @@ class PythonInteropError(Exception):
 
     pass
 
+
 # Type alias for Joy word implementations
 WordFunc = Callable[[ExecutionContext], None]
 

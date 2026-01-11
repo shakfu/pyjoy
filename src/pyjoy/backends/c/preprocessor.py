@@ -87,9 +87,7 @@ class IncludePreprocessor:
         finally:
             self._include_stack.pop()
 
-    def _process_terms_inline(
-        self, terms: List[Any], base_path: Path
-    ) -> List[Any]:
+    def _process_terms_inline(self, terms: List[Any], base_path: Path) -> List[Any]:
         """
         Process a list of terms, expanding includes and keeping definitions inline.
 

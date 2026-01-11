@@ -29,6 +29,7 @@ class CValue:
             return f"joy_integer({self.value})"
         elif self.type == "float":
             import math
+
             if math.isinf(self.value):
                 if self.value > 0:
                     return "joy_float(INFINITY)"

@@ -1,6 +1,8 @@
-# pyjoy
+# pyjoy-lang
 
 A Python implementation of Manfred von Thun's Joy programming language with dual-mode architecture.
+
+**PyPI package**: `pyjoy-lang` | **Command**: `pyjoy`
 
 The primary aim of this project is to [implement the Joy language in Python 3](docs/pyjoy.md). This means the implementation should run Joy programs without issue. A secondary aim is to have the Python implementation generate C code which can then be compiled into machine code. This is consistent with the late Manfred von Thun's wish:
 
@@ -13,14 +15,22 @@ The primary aim of this project is to [implement the Joy language in Python 3](d
 
 The implementation provides a **dual-mode architecture**: strict mode (`strict=True`) for Joy compliance, and pythonic mode (`strict=False`) for Python interoperability.
 
-## Building
+## Installation
+
+### From PyPI
+
+```bash
+pip install pyjoy-lang
+```
+
+### From Source
 
 Requires Python 3.13+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 # Clone the repository
-git clone https://github.com/shakfu/pyjoy.git
-cd pyjoy
+git clone https://github.com/shakfu/pyjoy-lang.git
+cd pyjoy-lang
 
 # Install dependencies
 uv sync
@@ -249,7 +259,7 @@ def http_get(ctx: ExecutionContext):
 ## Project Structure
 
 ```sh
-pyjoy/
+pyjoy-lang/
   src/pyjoy/
     __init__.py         # Public API
     __main__.py         # CLI entry point
