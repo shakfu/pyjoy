@@ -730,6 +730,19 @@ void joy_dict_define_primitive(JoyDict* dict, const char* name, JoyPrimitive fn)
     JoyWord* word = joy_alloc(sizeof(JoyWord));
     word->name = joy_strdup(name);
     word->is_primitive = true;
+    word->is_user = false;  /* Built-in primitive */
+    word->body.primitive = fn;
+    joy_dict_set(dict, name, word);
+}
+
+void joy_dict_define_user(JoyDict* dict, const char* name, JoyPrimitive fn) {
+    /* Like joy_dict_define_primitive, but marks as user-defined.
+     * Used for compiled user definitions that execute as C functions but should
+     * be recognized as user-defined words by the 'user' predicate. */
+    JoyWord* word = joy_alloc(sizeof(JoyWord));
+    word->name = joy_strdup(name);
+    word->is_primitive = true;   /* Body is a function pointer */
+    word->is_user = true;        /* Mark as user-defined for 'user' predicate */
     word->body.primitive = fn;
     joy_dict_set(dict, name, word);
 }
@@ -737,7 +750,8 @@ void joy_dict_define_primitive(JoyDict* dict, const char* name, JoyPrimitive fn)
 void joy_dict_define_quotation(JoyDict* dict, const char* name, JoyQuotation* quot) {
     JoyWord* word = joy_alloc(sizeof(JoyWord));
     word->name = joy_strdup(name);
-    word->is_primitive = false;
+    word->is_primitive = false;  /* Body is a quotation */
+    word->is_user = true;        /* User-defined via quotation */
     word->body.quotation = quot;
     joy_dict_set(dict, name, word);
 }

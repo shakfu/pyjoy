@@ -397,7 +397,15 @@ def cmd_test_compile(files: list[Path], verbose: bool = False) -> int:
                 cwd=filepath.parent,  # Run from test file's directory
             )
 
-            if "false" in proc.stdout.lower():
+            # Check for "false" as a standalone test result (not part of stack dump)
+            # Test assertions output "false" at the start of a line
+            c_failed = False
+            for line in proc.stdout.split("\n"):
+                # Only match "false" with no leading whitespace (test result, not docs)
+                if line.lower() == "false" or line.lower().startswith("false\t"):
+                    c_failed = True
+                    break
+            if c_failed:
                 failed += 1
                 print(f"  FAIL (C): {filepath.name}")
             else:

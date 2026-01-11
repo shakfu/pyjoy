@@ -15,11 +15,20 @@ from ...types import JoyQuotation, JoyType, JoyValue
 
 
 @dataclass
+class CDefine:
+    """Represents a definition registration in C code."""
+
+    name: str  # Joy word name
+    c_name: str  # C function name (versioned)
+    body: "CQuotation"  # Body as quotation
+
+
+@dataclass
 class CValue:
     """Represents a Joy value in C code."""
 
     # "integer", "float", "boolean", "char", "string", "list", "set",
-    # "quotation", "symbol"
+    # "quotation", "symbol", "define"
     type: str
     value: Any
 
@@ -126,6 +135,7 @@ class JoyToCConverter:
     def __init__(self) -> None:
         self._quotation_counter = 0
         self._program: CProgram | None = None
+        self._definition_versions: dict[str, int] = {}  # Track version per name
 
     def _next_quotation_name(self) -> str:
         """Generate a unique name for a quotation."""
@@ -195,33 +205,40 @@ class JoyToCConverter:
 
         Args:
             program: The main program as a quotation
-            definitions: User-defined words (name -> body)
+            definitions: User-defined words (name -> body) - deprecated, ignored
 
         Returns:
             CProgram ready for C emission
         """
         self._quotation_counter = 0
+        self._definition_versions = {}
         self._program = CProgram()
 
-        # Convert user definitions
-        if definitions:
-            for name, body in definitions.items():
-                c_def = self._convert_definition(name, body)
-                self._program.add_definition(c_def)
-
-        # Convert main program
-        self._program.main_body = self._convert_quotation(program, "_main_program")
+        # Convert main program (definitions are processed inline)
+        self._program.main_body = self._convert_quotation(
+            program, "_main_program", process_defines=True
+        )
 
         return self._program
 
     def _convert_definition(self, name: str, body: JoyQuotation) -> CDefinition:
-        """Convert a Joy definition to C."""
-        c_name = f"joy_word_{self._sanitize_name(name)}"
-        c_body = self._convert_quotation(body, c_name + "_body")
+        """Convert a Joy definition to C with versioned function name."""
+        # Get or create version counter for this name
+        version = self._definition_versions.get(name, 0)
+        self._definition_versions[name] = version + 1
+
+        # Create versioned C function name
+        sanitized = self._sanitize_name(name)
+        if version == 0:
+            c_name = f"joy_word_{sanitized}"
+        else:
+            c_name = f"joy_word_{sanitized}_v{version}"
+
+        c_body = self._convert_quotation(body, c_name + "_body", process_defines=False)
         return CDefinition(name=name, c_name=c_name, body=c_body)
 
     def _convert_quotation(
-        self, quotation: JoyQuotation, name: str | None = None
+        self, quotation: JoyQuotation, name: str | None = None, process_defines: bool = False
     ) -> CQuotation:
         """Convert a Joy quotation to C."""
         if name is None:
@@ -230,9 +247,21 @@ class JoyToCConverter:
         c_quot = CQuotation(name=name)
 
         for term in quotation.terms:
-            # Skip Definition objects - they're handled separately
+            # Handle Definition objects inline when process_defines=True
             if isinstance(term, Definition):
+                if process_defines:
+                    # Create a versioned definition and add to program
+                    c_def = self._convert_definition(term.name, term.body)
+                    if self._program:
+                        self._program.add_definition(c_def)
+                    # Add a "define" term to register this definition at runtime
+                    c_define = CDefine(
+                        name=term.name, c_name=c_def.c_name, body=c_def.body
+                    )
+                    c_quot.add_term(CValue(type="define", value=c_define))
+                # Skip definitions in nested quotations (process_defines=False)
                 continue
+
             c_value = self._convert_value(term)
             c_quot.add_term(c_value)
 

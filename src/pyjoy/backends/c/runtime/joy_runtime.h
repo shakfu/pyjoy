@@ -154,7 +154,8 @@ typedef void (*JoyPrimitive)(JoyContext* ctx);
 /* Word definition */
 typedef struct {
     char* name;
-    bool is_primitive;
+    bool is_primitive;  /* true = body.primitive is a function ptr, false = body.quotation */
+    bool is_user;       /* true = user-defined word (for 'user' primitive), false = builtin */
     union {
         JoyPrimitive primitive;
         JoyQuotation* quotation;
@@ -190,6 +191,7 @@ struct JoyContext {
 JoyDict* joy_dict_new(void);
 void joy_dict_free(JoyDict* dict);
 void joy_dict_define_primitive(JoyDict* dict, const char* name, JoyPrimitive fn);
+void joy_dict_define_user(JoyDict* dict, const char* name, JoyPrimitive fn);
 void joy_dict_define_quotation(JoyDict* dict, const char* name, JoyQuotation* quot);
 JoyWord* joy_dict_lookup(JoyDict* dict, const char* name);
 

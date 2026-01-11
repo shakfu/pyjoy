@@ -240,12 +240,27 @@ run: $(TARGET)
             shutil.copy2(hdr, dst)
 
 
+def _load_stdlib_source() -> str:
+    """Load stdlib Joy source files (inilib.joy, agglib.joy)."""
+    stdlib_dir = Path(__file__).parent.parent.parent / "stdlib"
+    libs = ["inilib.joy", "agglib.joy"]
+    sources = []
+
+    for lib in libs:
+        lib_path = stdlib_dir / lib
+        if lib_path.exists():
+            sources.append(lib_path.read_text())
+
+    return "\n".join(sources)
+
+
 def compile_joy_to_c(
     source: str,
     output_dir: str | Path | None = None,
     target_name: str = "joy_program",
     compile_executable: bool = True,
     source_path: str | Path | None = None,
+    load_stdlib: bool = False,
 ) -> dict[str, Any]:
     """
     High-level function to compile Joy source to C.
@@ -256,6 +271,7 @@ def compile_joy_to_c(
         target_name: Name for the output executable
         compile_executable: Whether to compile the C code
         source_path: Path to the source file (for resolving includes)
+        load_stdlib: Whether to load stdlib definitions (default: True)
 
     Returns:
         Dictionary with:
@@ -264,10 +280,14 @@ def compile_joy_to_c(
             - "executable": Path to executable (if compiled)
             - "makefile": Path to Makefile (if output_dir provided)
     """
-    from ...parser import Definition
     from .converter import JoyToCConverter
     from .emitter import CEmitter
     from .preprocessor import preprocess_includes
+
+    # Optionally prepend stdlib definitions
+    if load_stdlib:
+        stdlib_source = _load_stdlib_source()
+        source = stdlib_source + "\n" + source
 
     # Parse and preprocess (expands includes)
     if source_path:
@@ -278,14 +298,9 @@ def compile_joy_to_c(
         parser = Parser()
         parse_result = parser.parse_full(source)
 
-    # Extract definitions from program terms (they're now inlined)
-    definitions = {
-        t.name: t.body for t in parse_result.program.terms if isinstance(t, Definition)
-    }
-
-    # Convert to C representation
+    # Convert to C representation (definitions are handled inline)
     converter = JoyToCConverter()
-    c_program = converter.convert(parse_result.program, definitions)
+    c_program = converter.convert(parse_result.program)
 
     # Emit C code
     emitter = CEmitter()

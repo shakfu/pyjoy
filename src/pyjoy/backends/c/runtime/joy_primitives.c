@@ -11,6 +11,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <inttypes.h>
 
 /* Global storage for command line arguments */
 static int joy_argc = 0;
@@ -2972,15 +2973,15 @@ static void prim_user(JoyContext* ctx) {
     REQUIRE(1, "user");
     JoyValue v = POP();
 
-    bool is_user = false;
+    bool result = false;
     if (v.type == JOY_SYMBOL) {
         JoyWord* word = joy_dict_lookup(ctx->dictionary, v.data.symbol);
-        if (word && !word->is_primitive) {
-            is_user = true;
+        if (word && word->is_user) {
+            result = true;
         }
     }
 
-    PUSH(joy_boolean(is_user));
+    PUSH(joy_boolean(result));
     joy_value_free(&v);
 }
 
@@ -3446,7 +3447,7 @@ static void prim_srand(JoyContext* ctx) {
 }
 
 static void prim_localtime(JoyContext* ctx) {
-    /* I -> T : convert time_t to local time struct (list of 9 integers) */
+    /* I -> T : convert time_t to local time [year mon day hour min sec isdst yday wday] */
     REQUIRE(1, "localtime");
     JoyValue v = POP();
     EXPECT_TYPE(v, JOY_INTEGER, "localtime");
@@ -3461,24 +3462,24 @@ static void prim_localtime(JoyContext* ctx) {
         return;
     }
 
-    /* Create list: [sec min hour mday mon year wday yday isdst] */
+    /* Create list: [year mon day hour min sec isdst yday wday] (Python format) */
     JoyList* result = joy_list_new(9);
-    joy_list_push(result, joy_integer(tm->tm_sec));
-    joy_list_push(result, joy_integer(tm->tm_min));
-    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_year + 1900));  /* Full year */
+    joy_list_push(result, joy_integer(tm->tm_mon + 1));      /* 1-12 */
     joy_list_push(result, joy_integer(tm->tm_mday));
-    joy_list_push(result, joy_integer(tm->tm_mon));
-    joy_list_push(result, joy_integer(tm->tm_year));
-    joy_list_push(result, joy_integer(tm->tm_wday));
-    joy_list_push(result, joy_integer(tm->tm_yday));
-    joy_list_push(result, joy_integer(tm->tm_isdst));
+    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_min));
+    joy_list_push(result, joy_integer(tm->tm_sec));
+    joy_list_push(result, joy_boolean(tm->tm_isdst > 0));
+    joy_list_push(result, joy_integer(tm->tm_yday + 1));     /* 1-366 */
+    joy_list_push(result, joy_integer(tm->tm_wday));         /* 0=Sun, 6=Sat */
 
     JoyValue rv = {.type = JOY_LIST, .data.list = result};
     PUSH(rv);
 }
 
 static void prim_gmtime(JoyContext* ctx) {
-    /* I -> T : convert time_t to UTC time struct (list of 9 integers) */
+    /* I -> T : convert time_t to UTC time [year mon day hour min sec isdst yday wday] */
     REQUIRE(1, "gmtime");
     JoyValue v = POP();
     EXPECT_TYPE(v, JOY_INTEGER, "gmtime");
@@ -3493,27 +3494,27 @@ static void prim_gmtime(JoyContext* ctx) {
         return;
     }
 
-    /* Create list: [sec min hour mday mon year wday yday isdst] */
+    /* Create list: [year mon day hour min sec isdst yday wday] (Python format) */
     JoyList* result = joy_list_new(9);
-    joy_list_push(result, joy_integer(tm->tm_sec));
-    joy_list_push(result, joy_integer(tm->tm_min));
-    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_year + 1900));  /* Full year */
+    joy_list_push(result, joy_integer(tm->tm_mon + 1));      /* 1-12 */
     joy_list_push(result, joy_integer(tm->tm_mday));
-    joy_list_push(result, joy_integer(tm->tm_mon));
-    joy_list_push(result, joy_integer(tm->tm_year));
-    joy_list_push(result, joy_integer(tm->tm_wday));
-    joy_list_push(result, joy_integer(tm->tm_yday));
-    joy_list_push(result, joy_integer(tm->tm_isdst));
+    joy_list_push(result, joy_integer(tm->tm_hour));
+    joy_list_push(result, joy_integer(tm->tm_min));
+    joy_list_push(result, joy_integer(tm->tm_sec));
+    joy_list_push(result, joy_boolean(tm->tm_isdst > 0));
+    joy_list_push(result, joy_integer(tm->tm_yday + 1));     /* 1-366 */
+    joy_list_push(result, joy_integer(tm->tm_wday));         /* 0=Sun, 6=Sat */
 
     JoyValue rv = {.type = JOY_LIST, .data.list = result};
     PUSH(rv);
 }
 
 static void prim_mktime(JoyContext* ctx) {
-    /* T -> I : convert time struct (list of 9 integers) to time_t */
+    /* T -> I : convert time list [year mon day hour min sec isdst yday wday] to time_t */
     REQUIRE(1, "mktime");
     JoyValue v = POP();
-    if (v.type != JOY_LIST) {
+    if (v.type != JOY_LIST && v.type != JOY_QUOTATION) {
         joy_value_free(&v);
         joy_error_type("mktime", "LIST", v.type);
     }
@@ -3524,16 +3525,22 @@ static void prim_mktime(JoyContext* ctx) {
         exit(1);
     }
 
+    /* Input format: [year mon day hour min sec isdst yday wday] (Python format) */
     struct tm tm = {0};
-    tm.tm_sec = (int)v.data.list->items[0].data.integer;
-    tm.tm_min = (int)v.data.list->items[1].data.integer;
-    tm.tm_hour = (int)v.data.list->items[2].data.integer;
-    tm.tm_mday = (int)v.data.list->items[3].data.integer;
-    tm.tm_mon = (int)v.data.list->items[4].data.integer;
-    tm.tm_year = (int)v.data.list->items[5].data.integer;
-    tm.tm_wday = (int)v.data.list->items[6].data.integer;
-    tm.tm_yday = (int)v.data.list->items[7].data.integer;
-    tm.tm_isdst = (int)v.data.list->items[8].data.integer;
+    tm.tm_year = (int)v.data.list->items[0].data.integer - 1900;  /* Convert to years since 1900 */
+    tm.tm_mon = (int)v.data.list->items[1].data.integer - 1;      /* Convert to 0-11 */
+    tm.tm_mday = (int)v.data.list->items[2].data.integer;
+    tm.tm_hour = (int)v.data.list->items[3].data.integer;
+    tm.tm_min = (int)v.data.list->items[4].data.integer;
+    tm.tm_sec = (int)v.data.list->items[5].data.integer;
+    /* items[6] is isdst (boolean or int) */
+    if (v.data.list->items[6].type == JOY_BOOLEAN) {
+        tm.tm_isdst = v.data.list->items[6].data.boolean ? 1 : 0;
+    } else {
+        tm.tm_isdst = (int)v.data.list->items[6].data.integer;
+    }
+    tm.tm_yday = (int)v.data.list->items[7].data.integer - 1;     /* Convert to 0-365 */
+    tm.tm_wday = (int)v.data.list->items[8].data.integer;
 
     joy_value_free(&v);
 
@@ -3564,16 +3571,22 @@ static void prim_strftime(JoyContext* ctx) {
         exit(1);
     }
 
+    /* Input format: [year mon day hour min sec isdst yday wday] (Python format) */
     struct tm tm = {0};
-    tm.tm_sec = (int)t.data.list->items[0].data.integer;
-    tm.tm_min = (int)t.data.list->items[1].data.integer;
-    tm.tm_hour = (int)t.data.list->items[2].data.integer;
-    tm.tm_mday = (int)t.data.list->items[3].data.integer;
-    tm.tm_mon = (int)t.data.list->items[4].data.integer;
-    tm.tm_year = (int)t.data.list->items[5].data.integer;
-    tm.tm_wday = (int)t.data.list->items[6].data.integer;
-    tm.tm_yday = (int)t.data.list->items[7].data.integer;
-    tm.tm_isdst = (int)t.data.list->items[8].data.integer;
+    tm.tm_year = (int)t.data.list->items[0].data.integer - 1900;  /* Convert to years since 1900 */
+    tm.tm_mon = (int)t.data.list->items[1].data.integer - 1;      /* Convert to 0-11 */
+    tm.tm_mday = (int)t.data.list->items[2].data.integer;
+    tm.tm_hour = (int)t.data.list->items[3].data.integer;
+    tm.tm_min = (int)t.data.list->items[4].data.integer;
+    tm.tm_sec = (int)t.data.list->items[5].data.integer;
+    /* items[6] is isdst (boolean or int) */
+    if (t.data.list->items[6].type == JOY_BOOLEAN) {
+        tm.tm_isdst = t.data.list->items[6].data.boolean ? 1 : 0;
+    } else {
+        tm.tm_isdst = (int)t.data.list->items[6].data.integer;
+    }
+    tm.tm_yday = (int)t.data.list->items[7].data.integer - 1;     /* Convert to 0-365 */
+    tm.tm_wday = (int)t.data.list->items[8].data.integer;
 
     char buffer[256];
     size_t len = strftime(buffer, sizeof(buffer), fmt.data.string, &tm);
@@ -4258,6 +4271,164 @@ static void prim_body(JoyContext* ctx) {
     }
 }
 
+/* ---------- Type Casting ---------- */
+
+static void prim_casting(JoyContext* ctx) {
+    /* X T -> Y : cast value X to type T
+     * Joy42 type codes (matching typeof):
+     * 4 = BOOLEAN, 5 = CHAR, 6 = INTEGER, 7 = SET,
+     * 8 = STRING, 9 = LIST, 10 = FLOAT, 11 = FILE
+     */
+    REQUIRE(2, "casting");
+    JoyValue t = POP();
+    JoyValue x = POP();
+    EXPECT_TYPE(t, JOY_INTEGER, "casting");
+
+    int64_t target_type = t.data.integer;
+    joy_value_free(&t);
+
+    switch (target_type) {
+        case 4: { /* BOOLEAN */
+            bool result = false;
+            switch (x.type) {
+                case JOY_BOOLEAN: result = x.data.boolean; break;
+                case JOY_INTEGER: result = x.data.integer != 0; break;
+                case JOY_FLOAT: result = x.data.floating != 0.0; break;
+                case JOY_CHAR: result = x.data.character != 0; break;
+                case JOY_STRING: result = x.data.string && strlen(x.data.string) > 0; break;
+                case JOY_SET: result = x.data.set != 0; break;
+                case JOY_LIST:
+                case JOY_QUOTATION: result = x.data.list && x.data.list->length > 0; break;
+                case JOY_FILE: result = x.data.file != NULL; break;
+                default: break;
+            }
+            joy_value_free(&x);
+            PUSH(joy_boolean(result));
+            break;
+        }
+        case 5: { /* CHAR */
+            char ch = '\0';
+            if (x.type == JOY_CHAR) {
+                ch = x.data.character;
+            } else if (x.type == JOY_INTEGER) {
+                ch = (char)(x.data.integer & 0xFF);
+            } else if (x.type == JOY_STRING && x.data.string && strlen(x.data.string) > 0) {
+                ch = x.data.string[0];
+            }
+            joy_value_free(&x);
+            PUSH(joy_char(ch));
+            break;
+        }
+        case 6: { /* INTEGER */
+            int64_t val = 0;
+            switch (x.type) {
+                case JOY_INTEGER: val = x.data.integer; break;
+                case JOY_CHAR: val = (unsigned char)x.data.character; break;
+                case JOY_FLOAT: val = (int64_t)x.data.floating; break;
+                case JOY_BOOLEAN: val = x.data.boolean ? 1 : 0; break;
+                case JOY_SET: val = (int64_t)x.data.set; break;
+                default: break;
+            }
+            joy_value_free(&x);
+            PUSH(joy_integer(val));
+            break;
+        }
+        case 7: { /* SET */
+            uint64_t set_val = 0;
+            if (x.type == JOY_SET) {
+                set_val = x.data.set;
+            } else if (x.type == JOY_INTEGER) {
+                set_val = (uint64_t)x.data.integer;
+            }
+            joy_value_free(&x);
+            JoyValue set_result;
+            set_result.type = JOY_SET;
+            set_result.data.set = set_val;
+            PUSH(set_result);
+            break;
+        }
+        case 8: { /* STRING */
+            char buf[256];
+            char* result = NULL;
+            if (x.type == JOY_STRING) {
+                PUSH(x);  /* Already a string, just push back */
+                return;
+            } else if (x.type == JOY_CHAR) {
+                buf[0] = x.data.character;
+                buf[1] = '\0';
+                result = strdup(buf);
+            } else if (x.type == JOY_INTEGER) {
+                snprintf(buf, sizeof(buf), "%" PRId64, x.data.integer);
+                result = strdup(buf);
+            } else if (x.type == JOY_FLOAT) {
+                snprintf(buf, sizeof(buf), "%g", x.data.floating);
+                result = strdup(buf);
+            } else {
+                result = strdup("");
+            }
+            joy_value_free(&x);
+            PUSH(joy_string_owned(result));
+            break;
+        }
+        case 9: { /* LIST */
+            if (x.type == JOY_LIST || x.type == JOY_QUOTATION) {
+                PUSH(x);  /* Already a list/quotation */
+                return;
+            } else if (x.type == JOY_STRING) {
+                /* Convert string to list of chars */
+                size_t len = x.data.string ? strlen(x.data.string) : 0;
+                JoyList* list = joy_list_new(len);
+                for (size_t i = 0; i < len; i++) {
+                    joy_list_push(list, joy_char(x.data.string[i]));
+                }
+                joy_value_free(&x);
+                JoyValue list_result;
+                list_result.type = JOY_LIST;
+                list_result.data.list = list;
+                PUSH(list_result);
+            } else {
+                joy_value_free(&x);
+                JoyValue list_result;
+                list_result.type = JOY_LIST;
+                list_result.data.list = joy_list_new(0);
+                PUSH(list_result);
+            }
+            break;
+        }
+        case 10: { /* FLOAT */
+            double val = 0.0;
+            if (x.type == JOY_FLOAT) {
+                PUSH(x);  /* Already a float */
+                return;
+            } else if (x.type == JOY_INTEGER) {
+                /* Bit-level reinterpretation: treat integer bits as IEEE 754 double */
+                union { uint64_t i; double d; } u;
+                u.i = (uint64_t)x.data.integer;
+                val = u.d;
+            } else if (x.type == JOY_CHAR) {
+                val = (double)(unsigned char)x.data.character;
+            } else if (x.type == JOY_BOOLEAN) {
+                val = x.data.boolean ? 1.0 : 0.0;
+            }
+            joy_value_free(&x);
+            PUSH(joy_float(val));
+            break;
+        }
+        case 11: { /* FILE */
+            joy_value_free(&x);
+            JoyValue file_result;
+            file_result.type = JOY_FILE;
+            file_result.data.file = NULL;
+            PUSH(file_result);
+            break;
+        }
+        default:
+            /* Unknown type code - just push back the original value */
+            PUSH(x);
+            break;
+    }
+}
+
 /* ---------- System Interaction ---------- */
 
 static void prim_system(JoyContext* ctx) {
@@ -4559,6 +4730,7 @@ void joy_register_primitives(JoyContext* ctx) {
     joy_dict_define_primitive(d, "name", prim_name);
     joy_dict_define_primitive(d, "intern", prim_intern);
     joy_dict_define_primitive(d, "body", prim_body);
+    joy_dict_define_primitive(d, "casting", prim_casting);
 
     /* File I/O */
     joy_dict_define_primitive(d, "stdin", prim_stdin);

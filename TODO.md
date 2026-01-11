@@ -3,10 +3,8 @@
 ## Current Test Results
 
 **Python Interpreter:** 210/215 tests passing (97.7%)
-**C Backend:** 208/215 tests passing (96.7%)
+**C Backend:** 213/215 tests passing (99.1%)
 **pytest (unit tests):** 712/712 passing (100%)
-
-Note: Recent C backend fixes include atan2 argument order, symbol-string equality, Windows .exe extension.
 
 ---
 
@@ -17,16 +15,7 @@ Note: Recent C backend fixes include atan2 argument order, symbol-string equalit
 | Test | Issue |
 |------|-------|
 | maxint.joy | Python arbitrary precision differs from Joy64 fixed 64-bit overflow |
-| mktime.joy | Time function format/behavior differences |
-
-### C Backend Known Issues
-
-| Test | Issue |
-|------|-------|
-| cond.joy | C backend doesn't support DEFINE redefinition during execution (uses last definition) |
-| ftell.joy | File operation issue - fseek/ftell interaction needs investigation |
-| null.joy | Multiple issues - file operations and stdlib dependencies |
-| user.joy | C backend doesn't load stdlib, so `sum` isn't defined as user word |
+| mktime.joy | Timezone issue: `gmtime` returns UTC, `mktime` expects local time |
 
 ### Test Categories (Non-Bug)
 
@@ -39,6 +28,12 @@ Note: Recent C backend fixes include atan2 argument order, symbol-string equalit
 
 ## Recently Completed
 
+- [x] C backend stdlib loading - Added `load_stdlib` parameter to `compile_joy_to_c()`, loads inilib.joy and agglib.joy; fixed `is_user` flag in JoyWord to prevent double-free crash
+- [x] C backend DEFINE redefinition support - Definitions now registered inline in run_program(), enabling dynamic word redefinition
+- [x] C test runner fix - "false" detection now only matches at start of line (not in stack dumps)
+- [x] Large integer handling - Integers > 64-bit converted to floats in C code generation
+- [x] `casting` primitive in C runtime - Type conversion with Joy42 type codes
+- [x] `gmtime`/`localtime`/`mktime`/`strftime` format fix - Now use Python-compatible format [year mon day hour min sec isdst yday wday]
 - [x] `atan2` in C runtime - Fixed argument order to match Python (was reversed)
 - [x] `equal` in C runtime - Symbol-string comparison now works (fixes undefs.joy)
 - [x] Windows .exe extension - C builder now adds .exe suffix on Windows platform

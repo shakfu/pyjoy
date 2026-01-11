@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-from .converter import CDefinition, CProgram, CQuotation, CValue
+from .converter import CDefine, CDefinition, CProgram, CQuotation, CValue
 
 
 class CEmitter:
@@ -56,23 +56,12 @@ class CEmitter:
             lines.append("}")
             lines.append("")
 
-        # Emit user definitions
+        # Emit user definitions (functions only, registration happens inline)
         if program.definitions:
             lines.append("/* User-defined words */")
             for defn in program.definitions:
                 lines.append(self._emit_definition(defn))
                 lines.append("")
-
-        # Emit definition registration
-        if program.definitions:
-            lines.append("static void register_definitions(JoyContext* ctx) {")
-            for defn in program.definitions:
-                lines.append(
-                    f"    joy_dict_define_primitive("
-                    f'ctx->dictionary, "{defn.name}", {defn.c_name});'
-                )
-            lines.append("}")
-            lines.append("")
 
         # Emit main program execution
         lines.append("/* Main program execution */")
@@ -118,7 +107,14 @@ class CEmitter:
     def _emit_value_init(self, value: CValue) -> str:
         """Emit C code to create a JoyValue."""
         if value.type == "integer":
-            return f"joy_integer({value.value})"
+            # Check if integer is within 64-bit signed range
+            INT64_MIN = -9223372036854775808
+            INT64_MAX = 9223372036854775807
+            if INT64_MIN <= value.value <= INT64_MAX:
+                return f"joy_integer({value.value})"
+            else:
+                # Convert to float for values outside 64-bit range
+                return f"joy_float({float(value.value)})"
 
         elif value.type == "float":
             import math
@@ -203,7 +199,16 @@ class CEmitter:
         lines = []
 
         for term in quotation.terms:
-            if term.type == "symbol":
+            if term.type == "define":
+                # Register a user-defined word at this point in the program
+                c_define = term.value
+                if isinstance(c_define, CDefine):
+                    lines.append(
+                        f'{indent_str}joy_dict_define_user('
+                        f'ctx->dictionary, "{c_define.name}", {c_define.c_name});'
+                    )
+
+            elif term.type == "symbol":
                 # Execute the symbol
                 lines.append(f'{indent_str}joy_execute_symbol(ctx, "{term.value}");')
 
@@ -228,7 +233,6 @@ class CEmitter:
     def _emit_main(self, program: CProgram) -> str:
         """Emit the main function."""
         has_quotations = bool(program.quotations)
-        has_definitions = bool(program.definitions)
 
         lines = []
         lines.append("int main(int argc, char* argv[]) {")
@@ -243,10 +247,8 @@ class CEmitter:
             lines.append("    init_quotations();")
             lines.append("")
 
-        if has_definitions:
-            lines.append("    /* Register user definitions */")
-            lines.append("    register_definitions(ctx);")
-            lines.append("")
+        # Note: User definitions are registered inline in run_program()
+        # to support dynamic redefinition
 
         lines.append("    /* Run program */")
         lines.append("    run_program(ctx);")
