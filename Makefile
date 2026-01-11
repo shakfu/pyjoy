@@ -1,4 +1,4 @@
-.PHONY: all sync repl build test test-joy coverage lint format typecheck clean compile-c run-c
+.PHONY: all sync repl build wheel-check test-publish publish test test-joy coverage lint format typecheck clean compile-c run-c
 
 all: sync
 
@@ -10,6 +10,15 @@ repl: sync
 
 build: sync
 	@uv build
+
+wheel-check: build
+	@uv run twine check dist/*
+
+test-publish: wheel-check
+	@uv run twine upload --repository testpypi dist/*
+
+publish: wheel-check
+	@uv run twine upload dist/*
 
 test: sync
 	@uv run pytest
