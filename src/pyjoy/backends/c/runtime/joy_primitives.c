@@ -3345,13 +3345,13 @@ static void prim_atan(JoyContext* ctx) {
 static void prim_atan2(JoyContext* ctx) {
     /* F G -> H : two-argument arc tangent */
     REQUIRE(2, "atan2");
-    JoyValue vy = POP();
-    JoyValue vx = POP();
-    double y = (vy.type == JOY_INTEGER) ? (double)vy.data.integer : vy.data.floating;
-    double x = (vx.type == JOY_INTEGER) ? (double)vx.data.integer : vx.data.floating;
-    joy_value_free(&vx);
-    joy_value_free(&vy);
-    PUSH(joy_float(atan2(y, x)));
+    JoyValue vb = POP();  /* TOS */
+    JoyValue va = POP();  /* second */
+    double b = (vb.type == JOY_INTEGER) ? (double)vb.data.integer : vb.data.floating;
+    double a = (va.type == JOY_INTEGER) ? (double)va.data.integer : va.data.floating;
+    joy_value_free(&va);
+    joy_value_free(&vb);
+    PUSH(joy_float(atan2(a, b)));  /* atan2(second, TOS) */
 }
 
 static void prim_cosh(JoyContext* ctx) {
@@ -4087,6 +4087,14 @@ static bool joy_equal_values(JoyValue a, JoyValue b) {
     /* Symbol comparison */
     if (a.type == JOY_SYMBOL && b.type == JOY_SYMBOL) {
         return strcmp(a.data.symbol, b.data.symbol) == 0;
+    }
+
+    /* Symbol-String comparison: symbol "foo" equals string "foo" */
+    if (a.type == JOY_SYMBOL && b.type == JOY_STRING) {
+        return strcmp(a.data.symbol, b.data.string) == 0;
+    }
+    if (a.type == JOY_STRING && b.type == JOY_SYMBOL) {
+        return strcmp(a.data.string, b.data.symbol) == 0;
     }
 
     /* Numeric types can be compared across types using joy_numeric_value */

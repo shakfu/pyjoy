@@ -3,21 +3,30 @@
 ## Current Test Results
 
 **Python Interpreter:** 210/215 tests passing (97.7%)
-**C Backend:** 205/215 tests passing (95.3%)
+**C Backend:** 208/215 tests passing (96.7%)
 **pytest (unit tests):** 712/712 passing (100%)
 
-Note: Recent C backend fixes include autoput default, div/divmod, unstack, name, setecho, iflist, infra, float/SET equality.
+Note: Recent C backend fixes include atan2 argument order, symbol-string equality, Windows .exe extension.
 
 ---
 
 ## Remaining Tasks
 
-### Known Issues
+### Known Issues (Python & C)
 
 | Test | Issue |
 |------|-------|
 | maxint.joy | Python arbitrary precision differs from Joy64 fixed 64-bit overflow |
 | mktime.joy | Time function format/behavior differences |
+
+### C Backend Known Issues
+
+| Test | Issue |
+|------|-------|
+| cond.joy | C backend doesn't support DEFINE redefinition during execution (uses last definition) |
+| ftell.joy | File operation issue - fseek/ftell interaction needs investigation |
+| null.joy | Multiple issues - file operations and stdlib dependencies |
+| user.joy | C backend doesn't load stdlib, so `sum` isn't defined as user word |
 
 ### Test Categories (Non-Bug)
 
@@ -30,6 +39,9 @@ Note: Recent C backend fixes include autoput default, div/divmod, unstack, name,
 
 ## Recently Completed
 
+- [x] `atan2` in C runtime - Fixed argument order to match Python (was reversed)
+- [x] `equal` in C runtime - Symbol-string comparison now works (fixes undefs.joy)
+- [x] Windows .exe extension - C builder now adds .exe suffix on Windows platform
 - [x] `inf`/`-inf`/`nan` literals - Scanner now recognizes special float literals (with word boundary and definition lookahead)
 - [x] `casting` INT->FLOAT - Now uses bit-level reinterpretation (treats integer bits as IEEE 754 double)
 - [x] `strtol` base-0 - Auto-detects hex (0x prefix) and octal (0 prefix) like C
