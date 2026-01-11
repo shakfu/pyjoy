@@ -1,6 +1,6 @@
 [project]
 name = "pyjoy-lang"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Python implementation of the Joy programming language with C code generation"
 readme = "README.md"
 license = "GPL-3.0-or-later"

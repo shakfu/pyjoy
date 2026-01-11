@@ -1,10 +1,28 @@
 # Changelog
 
+## [0.1.2]
+
+### Fixed
+
+- `quit`: Now handles optional exit code (defaults to 0 if stack empty or non-integer)
+- C backend: `user` predicate now correctly checks `is_user` flag instead of `!is_primitive`
+- C backend: `atan2` argument order fixed to match Python semantics
+- C backend: `localtime`/`gmtime`/`mktime`/`strftime` now use Python-compatible format `[year mon day hour min sec isdst yday wday]`
+- C backend: Added `_POSIX_C_SOURCE` define for POSIX compatibility (fixes `strdup` on some systems)
+- Windows: C builder now adds `.exe` suffix to executables
+- Windows: Fixed test runner compatibility issues
+
+### Coverage
+
+- Python interpreter: 210/215 Joy tests passing (97.7%)
+- C backend: 213/215 Joy tests passing (99.1%)
+- pytest: 712/712 unit tests passing (100%)
+
 ## [0.1.1]
 
 ### Added - Dual-Mode Architecture
 
-Merged functionality from [pyjoy2](https://github.com/shakfu/pyjoy2) to support both strict Joy compliance and Pythonic interoperability in a single codebase.
+Merged functionality from another variant to support both strict Joy compliance and Pythonic interoperability in a single codebase.
 
 **Python Interop Syntax** (enabled with `strict=False`):
 - Backtick expressions: `` `2 + 3` `` evaluates Python and pushes result

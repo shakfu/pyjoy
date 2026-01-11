@@ -20,7 +20,7 @@ from pyjoy.scanner import Scanner, Token
 from pyjoy.stack import ExecutionContext, JoyStack
 from pyjoy.types import JoyQuotation, JoyType, JoyValue
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     # Types
