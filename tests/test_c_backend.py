@@ -4,6 +4,7 @@ Tests for the C code generation backend.
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -517,7 +518,8 @@ class TestCompilation:
             )
 
             assert proc.returncode == 0
-            assert (Path(tmpdir) / "test_make").exists()
+            exe_name = "test_make.exe" if sys.platform == "win32" else "test_make"
+            assert (Path(tmpdir) / exe_name).exists()
 
 
 class TestIncludePreprocessor:

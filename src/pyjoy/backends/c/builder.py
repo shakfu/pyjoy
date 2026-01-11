@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -71,6 +72,10 @@ class CBuilder:
             output = source.with_suffix("")
         else:
             output = Path(output_file)
+
+        # Add .exe suffix on Windows
+        if sys.platform == "win32" and output.suffix != ".exe":
+            output = output.with_suffix(".exe")
 
         # Build compilation command
         cmd = [self.compiler]
