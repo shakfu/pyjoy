@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- `strftime.joy` test: Enabled `%z` and `%Z` timezone format specifiers (were commented out)
+
 ## [0.1.2]
 
 ### Fixed

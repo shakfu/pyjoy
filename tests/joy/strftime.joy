@@ -34,8 +34,8 @@ putln dup
 "%R\n" strftime putchars dup
 "%T\n" strftime putchars dup
 "%p\n" strftime putchars dup
-# "%z\n" strftime putchars dup
-# "%Z\n" strftime putchars dup
+"%z\n" strftime putchars dup
+"%Z\n" strftime putchars dup
 
 "%h\n" strftime putchars dup
 "%D\n" strftime putchars dup
